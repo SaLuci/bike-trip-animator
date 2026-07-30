@@ -1,5 +1,5 @@
 import type { Projection, LonLatBounds } from './types';
-import { drawOceanBackground, drawCountries, drawCountryBorders } from './europeMap';
+import { drawOceanBackground, drawCountries, drawCountryBorders, drawTerrainRelief } from './europeMap';
 import { drawCountryLabels, drawRivers, drawLakes, drawSeaLabels } from './geoFeatures';
 
 /**
@@ -27,6 +27,7 @@ export function buildBasemapLayer(
   drawOceanBackground(ctx, width, height);
   drawSeaLabels(ctx, project, bounds, strokeScale);
   drawCountries(ctx, project, strokeScale);
+  drawTerrainRelief(ctx, project, strokeScale);
   drawCountryBorders(ctx, project, strokeScale);
   drawCountryLabels(ctx, project, strokeScale);
   drawRivers(ctx, project, bounds, strokeScale);

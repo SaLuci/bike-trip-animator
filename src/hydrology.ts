@@ -19,7 +19,10 @@ const RIVERS = hydroData.rivers as RiverInfo[];
 const LAKES = hydroData.lakes as LakeInfo[];
 
 const MIN_RIVER_LABEL_LENGTH_PX = 140;
-const MIN_LAKE_LABEL_AREA_PX = 2200;
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
 
 function inBounds(lon: number, lat: number, bounds: LonLatBounds): boolean {
   return lon >= bounds.minLon && lon <= bounds.maxLon && lat >= bounds.minLat && lat <= bounds.maxLat;
@@ -179,8 +182,14 @@ export function drawLakes(
     ctx.fill();
     ctx.stroke();
 
-    if (lake.name && largestOutline && largestArea >= MIN_LAKE_LABEL_AREA_PX * scale * scale) {
+    if (lake.name && largestOutline) {
       const centroid = ringCentroid(largestOutline);
+      const normalizedArea = largestArea / Math.max(1, scale * scale);
+      const fontPx = clamp(7.5 + Math.sqrt(normalizedArea) * 0.06, 8, 12) * scale;
+      ctx.font = `italic 600 ${fontPx}px system-ui, sans-serif`;
+      ctx.lineWidth = Math.max(2 * scale, fontPx * 0.16);
+      ctx.strokeStyle = 'rgba(255,255,255,0.88)';
+      ctx.strokeText(lake.name, centroid.cx, centroid.cy);
       ctx.fillStyle = '#2b6f8f';
       ctx.fillText(lake.name, centroid.cx, centroid.cy);
     }

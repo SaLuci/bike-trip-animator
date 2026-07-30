@@ -25,6 +25,11 @@ function pickSupportedFormat(): VideoFormat {
   return { mimeType: '', extension: 'webm' };
 }
 
+function pickVideoBitsPerSecond(canvas: HTMLCanvasElement, fps: number): number {
+  const estimated = Math.round(canvas.width * canvas.height * fps * 0.4);
+  return Math.max(6_000_000, Math.min(14_000_000, estimated));
+}
+
 export interface RecordedVideo {
   blob: Blob;
   extension: string;
@@ -44,9 +49,11 @@ export class CanvasVideoRecorder {
     }
     this.format = pickSupportedFormat();
     const stream = canvas.captureStream(fps);
-    this.recorder = this.format.mimeType
-      ? new MediaRecorder(stream, { mimeType: this.format.mimeType })
-      : new MediaRecorder(stream);
+    const options: MediaRecorderOptions = {
+      videoBitsPerSecond: pickVideoBitsPerSecond(canvas, fps)
+    };
+    if (this.format.mimeType) options.mimeType = this.format.mimeType;
+    this.recorder = new MediaRecorder(stream, options);
 
     this.finished = new Promise<Blob>((resolve) => {
       this.resolveFinished = resolve;

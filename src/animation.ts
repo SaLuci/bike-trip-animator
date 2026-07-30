@@ -31,6 +31,8 @@ import { drawCityOverlays, drawMountainOverlays, selectRouteCityOverlayData } fr
 import {
   CANVAS_WIDTH,
   CANVAS_HEIGHT,
+  VIDEO_WIDTH,
+  VIDEO_HEIGHT,
   STATIC_SUPERSAMPLE,
   FPS,
   FRAME_DELAY_MS,
@@ -71,10 +73,13 @@ function sleep(ms: number): Promise<void> {
 export async function generateVideo(data: TripData, opts: GenerateOptions): Promise<RecordedVideo> {
   const { canvas, onStatus, onProgress } = opts;
   const speed = Math.max(0.1, opts.speedMultiplier || 1);
-  canvas.width = CANVAS_WIDTH;
-  canvas.height = CANVAS_HEIGHT;
+  canvas.width = VIDEO_WIDTH;
+  canvas.height = VIDEO_HEIGHT;
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('Canvas 2D context is not available.');
+  const exportScaleX = VIDEO_WIDTH / CANVAS_WIDTH;
+  const exportScaleY = VIDEO_HEIGHT / CANVAS_HEIGHT;
+  const staticRenderScale = STATIC_SUPERSAMPLE * Math.max(exportScaleX, exportScaleY);
 
   const previousDaysKm = data.previousDaysTracks.reduce((sum, t) => sum + trackDistanceKm(t), 0);
   const currentDayKm = trackDistanceKm(data.currentDayPoints);
@@ -106,15 +111,15 @@ export async function generateVideo(data: TripData, opts: GenerateOptions): Prom
   // — e.g. with no previous/all-days data, the padded tracking view can poke outside a tight
   // fullBounds), supersampled so it still looks crisp when the camera crops into it tightly.
   const staticBounds = unionBounds(fullBounds, trackingBounds);
-  const staticWidth = CANVAS_WIDTH * STATIC_SUPERSAMPLE;
-  const staticHeight = CANVAS_HEIGHT * STATIC_SUPERSAMPLE;
+  const staticWidth = Math.round(CANVAS_WIDTH * STATIC_SUPERSAMPLE * exportScaleX);
+  const staticHeight = Math.round(CANVAS_HEIGHT * STATIC_SUPERSAMPLE * exportScaleY);
   const staticParams = computeProjectionParams(staticBounds, staticWidth, staticHeight, FULL_PADDING);
   const basemap = buildBasemapLayer(
     staticWidth,
     staticHeight,
     (lon, lat) => projectWithParams(staticParams, lon, lat),
     staticBounds,
-    STATIC_SUPERSAMPLE
+    staticRenderScale
   );
   const cityOverlays = selectRouteCityOverlayData(data.currentDayPoints);
 
@@ -196,6 +201,7 @@ export async function generateVideo(data: TripData, opts: GenerateOptions): Prom
       camT <= 0 ? trackingParams : camT >= 1 ? fullParams : lerpProjectionParams(trackingParams, fullParams, camT);
     const project = (lon: number, lat: number) => projectWithParams(camParams, lon, lat);
 
+    ctx.setTransform(exportScaleX, 0, 0, exportScaleY, 0, 0);
     const crop = cropRectFromCamera(camParams, CANVAS_WIDTH, CANVAS_HEIGHT, staticParams);
     ctx.drawImage(basemap, crop.sx, crop.sy, crop.sw, crop.sh, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
@@ -223,8 +229,18 @@ export async function generateVideo(data: TripData, opts: GenerateOptions): Prom
     drawMountainOverlays(ctx, project, camT, CANVAS_WIDTH, CANVAS_HEIGHT);
     drawCityOverlays(ctx, project, cityOverlays, camT, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-    if (startPoint) drawCityMarker(ctx, data.startCity, startPoint, project, '🚩', CANVAS_WIDTH);
-    if (endPoint) drawCityMarker(ctx, data.endCity, endPoint, project, '🏁', CANVAS_WIDTH);
+    if (startPoint) {
+      drawCityMarker(ctx, data.startCity, startPoint, project, '🚩', CANVAS_WIDTH, {
+        slideOutT: camT,
+        side: 'left'
+      });
+    }
+    if (endPoint) {
+      drawCityMarker(ctx, data.endCity, endPoint, project, '🏁', CANVAS_WIDTH, {
+        slideOutT: camT,
+        side: 'right'
+      });
+    }
 
     // Drawn after the start/end pins so the rider is always visible on top, even when it
     // ends up sitting at the exact same spot as the end pin.

@@ -1,11 +1,16 @@
-// Output size tuned for Instagram Stories/Reels (9:16).
+// Logical drawing size tuned for the app's existing 9:16 layout.
 export const CANVAS_WIDTH = 480;
 export const CANVAS_HEIGHT = 854;
+
+// Physical export size: the scene is still laid out on the logical canvas above, but the
+// final recorded video is rendered at this higher pixel resolution.
+export const VIDEO_WIDTH = 1080;
+export const VIDEO_HEIGHT = 1920;
 
 // The static basemap (countries/borders/mountains/cities/rivers) is pre-rendered once at
 // this multiple of the output size, then cropped+scaled per frame as the camera pans/zooms
 // — much cheaper than redrawing ~180 country polygons every single frame.
-export const STATIC_SUPERSAMPLE = 3;
+export const STATIC_SUPERSAMPLE = 2;
 
 // Animation timing (before the speed slider's multiplier is applied): first track today's
 // ride zoomed in on its own, a quick "explosion" celebrates today's total, then pull back

@@ -119,9 +119,95 @@ function countryFillColor(name: string, reliefMeters: number): string {
   const reliefT = clamp(Math.log1p(reliefMeters) / Math.log1p(4000), 0, 1);
   const hash = hashStr(name);
   const hue = 88 + (hash % 11) - 5;
-  const saturation = clamp(28 + ((hash >>> 4) % 9) - 4 + reliefT * 12, 22, 46);
-  const lightness = clamp(84 - reliefT * 28 + (((hash >>> 8) % 7) - 3) * 1.2, 48, 87);
+  const saturation = clamp(24 + ((hash >>> 4) % 8) - 4 + reliefT * 8, 18, 38);
+  const lightness = clamp(88 - reliefT * 18 + (((hash >>> 8) % 7) - 3) * 1.1, 60, 90);
   return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+}
+
+function traceAllLand(ctx: CanvasRenderingContext2D, project: Projection['project']) {
+  const { countries } = getEuropeGeoData();
+  for (const feature of countries.features) {
+    if (!feature.geometry) continue;
+    const geom = feature.geometry as { type: string; coordinates: unknown };
+    const polygons: Pos[][][] =
+      geom.type === 'Polygon'
+        ? [geom.coordinates as Pos[][]]
+        : geom.type === 'MultiPolygon'
+          ? (geom.coordinates as Pos[][][])
+          : [];
+    for (const polygon of polygons) {
+      for (const ring of polygon) traceRing(ctx, ring, project);
+    }
+  }
+}
+
+export function drawTerrainRelief(ctx: CanvasRenderingContext2D, project: Projection['project'], strokeScale = 1) {
+  const width = ctx.canvas.width;
+  const height = ctx.canvas.height;
+
+  ctx.save();
+  ctx.beginPath();
+  traceAllLand(ctx, project);
+  ctx.clip('evenodd');
+
+  for (const mountain of MOUNTAIN_POINTS) {
+    const [x, y] = project(mountain.lon, mountain.lat);
+    const margin = 180 * strokeScale;
+    if (x < -margin || x > width + margin || y < -margin || y > height + margin) continue;
+
+    const elevationT = clamp((mountain.elevation - 400) / 3600, 0, 1);
+    const rotation = (((hashStr(mountain.name) >>> 0) % 180) - 90) * (Math.PI / 180);
+    const outerRadius = (44 + elevationT * 150) * strokeScale;
+    const coreRadius = outerRadius * (0.24 + elevationT * 0.08);
+    const stretch = 1.45 + elevationT * 0.7;
+
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(rotation);
+    ctx.scale(stretch, 0.9);
+    ctx.globalCompositeOperation = 'multiply';
+    const shadow = ctx.createRadialGradient(0, -outerRadius * 0.14, coreRadius * 0.18, 0, 0, outerRadius);
+    shadow.addColorStop(0, 'rgba(128, 78, 36, 0.32)');
+    shadow.addColorStop(0.42, 'rgba(145, 94, 48, 0.18)');
+    shadow.addColorStop(1, 'rgba(145, 94, 48, 0)');
+    ctx.fillStyle = shadow;
+    ctx.beginPath();
+    ctx.arc(0, 0, outerRadius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    ctx.save();
+    ctx.translate(x + outerRadius * 0.1, y + outerRadius * 0.06);
+    ctx.rotate(rotation + 0.14);
+    ctx.scale(1 + elevationT * 0.35, 0.62);
+    ctx.globalCompositeOperation = 'multiply';
+    const core = ctx.createRadialGradient(0, -coreRadius * 0.12, coreRadius * 0.1, 0, 0, coreRadius);
+    core.addColorStop(0, 'rgba(110, 63, 28, 0.28)');
+    core.addColorStop(0.55, 'rgba(124, 77, 37, 0.16)');
+    core.addColorStop(1, 'rgba(124, 77, 37, 0)');
+    ctx.fillStyle = core;
+    ctx.beginPath();
+    ctx.arc(0, 0, coreRadius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    ctx.save();
+    ctx.translate(x - outerRadius * 0.18, y - outerRadius * 0.16);
+    ctx.rotate(rotation - 0.18);
+    ctx.scale(stretch * 0.9, 0.8);
+    ctx.globalCompositeOperation = 'screen';
+    const highlight = ctx.createRadialGradient(0, 0, 0, 0, 0, outerRadius * 0.85);
+    highlight.addColorStop(0, 'rgba(255, 245, 220, 0.18)');
+    highlight.addColorStop(0.45, 'rgba(255, 245, 220, 0.06)');
+    highlight.addColorStop(1, 'rgba(255, 245, 220, 0)');
+    ctx.fillStyle = highlight;
+    ctx.beginPath();
+    ctx.arc(0, 0, outerRadius * 0.85, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  ctx.restore();
 }
 
 function traceRing(ctx: CanvasRenderingContext2D, ring: Pos[], project: Projection['project']) {

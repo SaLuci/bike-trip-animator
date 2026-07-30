@@ -42,13 +42,23 @@ function roundedRectPath(ctx: CanvasRenderingContext2D, x: number, y: number, w:
   ctx.closePath();
 }
 
-export function drawLabelPill(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, fontPx: number) {
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function measureLabelPill(ctx: CanvasRenderingContext2D, text: string, fontPx: number): { w: number; h: number } {
   ctx.font = `700 ${fontPx}px system-ui, -apple-system, "Segoe UI", sans-serif`;
   const metrics = ctx.measureText(text);
   const paddingX = fontPx * 0.6;
   const paddingY = fontPx * 0.42;
-  const w = metrics.width + paddingX * 2;
-  const h = fontPx + paddingY * 2;
+  return {
+    w: metrics.width + paddingX * 2,
+    h: fontPx + paddingY * 2
+  };
+}
+
+export function drawLabelPill(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, fontPx: number) {
+  const { w, h } = measureLabelPill(ctx, text, fontPx);
   roundedRectPath(ctx, x - w / 2, y - h / 2, w, h, h / 2);
   ctx.fillStyle = COLORS.pillBg;
   ctx.fill();
@@ -58,17 +68,28 @@ export function drawLabelPill(ctx: CanvasRenderingContext2D, text: string, x: nu
   ctx.fillText(text, x, y);
 }
 
+export interface CityMarkerLabelOptions {
+  slideOutT?: number;
+  side?: 'left' | 'right';
+}
+
 export function drawCityMarker(
   ctx: CanvasRenderingContext2D,
   label: string,
   point: TrackPoint,
   project: Projection['project'],
   emoji: string,
-  canvasWidth: number
+  canvasWidth: number,
+  labelOptions: CityMarkerLabelOptions = {}
 ) {
   const [x, y] = project(point.lon, point.lat);
   const pinFontPx = 30;
+  const slideT = clamp(labelOptions.slideOutT ?? 0, 0, 1);
+  const alpha = 1 - slideT;
+  if (alpha <= 0.01) return;
+
   ctx.save();
+  ctx.globalAlpha = alpha;
   ctx.font = `${pinFontPx}px system-ui, sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'bottom';
@@ -76,9 +97,33 @@ export function drawCityMarker(
   ctx.restore();
 
   if (label && label.trim().length > 0) {
-    const labelY = y - pinFontPx - 14;
-    const clampedX = Math.min(Math.max(x, 90), canvasWidth - 90);
-    drawLabelPill(ctx, label.trim(), clampedX, labelY, 22);
+    const trimmed = label.trim();
+    const fontPx = 22;
+    const { w, h } = measureLabelPill(ctx, trimmed, fontPx);
+    const halfW = w / 2;
+    const baseX = clamp(x, halfW + 10, canvasWidth - halfW - 10);
+    const side = labelOptions.side ?? (x < canvasWidth / 2 ? 'left' : 'right');
+    const targetX = side === 'left' ? halfW + 10 : canvasWidth - halfW - 10;
+    const labelX = baseX + (targetX - baseX) * slideT;
+    const labelY = y - pinFontPx - 14 - 24 * slideT;
+
+    if (slideT > 0.02) {
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.strokeStyle = 'rgba(255,255,255,0.72)';
+      ctx.lineWidth = 2;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(x, y - pinFontPx * 0.95);
+      ctx.lineTo(labelX, labelY + h * 0.35);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    drawLabelPill(ctx, trimmed, labelX, labelY, fontPx);
+    ctx.restore();
   }
 }
 
