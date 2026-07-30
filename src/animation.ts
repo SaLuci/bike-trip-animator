@@ -17,7 +17,7 @@ import {
   DEFAULT_EUROPE_BOUNDS
 } from './geo';
 import { buildBasemapLayer } from './baseLayer';
-import { ensureHydrologyAssetsLoaded } from './hydrology';
+import { ensureHydrologyAssetsLoaded, drawLakeLabelOverlays } from './hydrology';
 import {
   drawPolyline,
   drawBikeMarker,
@@ -231,6 +231,7 @@ export async function generateVideo(data: TripData, opts: GenerateOptions): Prom
 
     drawMountainOverlays(ctx, project, camT, CANVAS_WIDTH, CANVAS_HEIGHT);
     drawCityOverlays(ctx, project, cityOverlays, camT, CANVAS_WIDTH, CANVAS_HEIGHT);
+    drawLakeLabelOverlays(ctx, project, staticBounds, camT);
 
     if (camT <= 0.02 && startPoint) {
       drawCityMarker(ctx, data.startCity, startPoint, project, '🚩', CANVAS_WIDTH);

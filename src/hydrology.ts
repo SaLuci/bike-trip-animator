@@ -55,16 +55,17 @@ export function drawLakes(
 ) {
   if (!euHydroLakesImage) return;
   ctx.save();
-  const reliefBandHeight = Math.max(2, Math.round(scale * 1.2));
+  const rasterBandHeight = 1;
   const lonSpan = EUROPE_RASTER_BOUNDS.maxLon - EUROPE_RASTER_BOUNDS.minLon;
   const latSpan = EUROPE_RASTER_BOUNDS.maxLat - EUROPE_RASTER_BOUNDS.minLat;
   const [dstLeft] = project(EUROPE_RASTER_BOUNDS.minLon, EUROPE_RASTER_BOUNDS.maxLat);
   const [dstRight] = project(EUROPE_RASTER_BOUNDS.maxLon, EUROPE_RASTER_BOUNDS.maxLat);
   ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
 
-  for (let sy = 0; sy < euHydroLakesImage.height - reliefBandHeight; sy += reliefBandHeight) {
+  for (let sy = 0; sy < euHydroLakesImage.height - rasterBandHeight; sy += rasterBandHeight) {
     const latNorth = EUROPE_RASTER_BOUNDS.maxLat - (sy / euHydroLakesImage.height) * latSpan;
-    const latSouth = EUROPE_RASTER_BOUNDS.maxLat - ((sy + reliefBandHeight) / euHydroLakesImage.height) * latSpan;
+    const latSouth = EUROPE_RASTER_BOUNDS.maxLat - ((sy + rasterBandHeight) / euHydroLakesImage.height) * latSpan;
     const [, dstTop] = project(EUROPE_RASTER_BOUNDS.minLon, latNorth);
     const [, dstBottom] = project(EUROPE_RASTER_BOUNDS.minLon, latSouth);
     const destHeight = dstBottom - dstTop;
@@ -75,7 +76,7 @@ export function drawLakes(
       0,
       sy,
       euHydroLakesImage.width,
-      reliefBandHeight,
+      rasterBandHeight,
       dstLeft,
       dstTop,
       dstRight - dstLeft,
@@ -83,7 +84,21 @@ export function drawLakes(
     );
   }
 
-  ctx.font = `italic 600 ${9 * scale}px system-ui, sans-serif`;
+  ctx.restore();
+}
+
+/** Draws lake name labels as a per-frame overlay so they can react to the zoom state. */
+export function drawLakeLabelOverlays(
+  ctx: CanvasRenderingContext2D,
+  project: Projection['project'],
+  bounds: LonLatBounds,
+  camT: number,
+  scale = 1
+) {
+  const alpha = clamp(1 - camT * 2.5, 0, 1);
+  if (alpha <= 0.02) return;
+  ctx.save();
+  ctx.globalAlpha = alpha;
   ctx.textAlign = 'center';
   for (const lake of LAKE_LABELS) {
     if (!inBounds(lake.lon, lake.lat, bounds)) continue;
