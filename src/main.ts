@@ -49,22 +49,8 @@ previousDaysInput.addEventListener('change', () => summarize(previousDaysInput, 
 currentDayInput.addEventListener('change', () => summarize(currentDayInput, currentDaySummary));
 allDaysInput.addEventListener('change', () => summarize(allDaysInput, allDaysSummary));
 
-// Emoji preset buttons
+// Emoji input — default to 🚴 on load
 riderEmojiInput.value = '🚴';
-document.querySelectorAll<HTMLElement>('.emoji-preset').forEach((btn) => {
-  btn.addEventListener('click', () => {
-    const emoji = btn.dataset.emoji ?? '🚴';
-    riderEmojiInput.value = emoji;
-    document.querySelectorAll('.emoji-preset').forEach((b) => b.classList.remove('selected'));
-    btn.classList.add('selected');
-  });
-});
-riderEmojiInput.addEventListener('input', () => {
-  const val = riderEmojiInput.value;
-  document.querySelectorAll<HTMLElement>('.emoji-preset').forEach((b) => {
-    b.classList.toggle('selected', b.dataset.emoji === val);
-  });
-});
 
 function updateSpeedLabel() {
   speedValueLabel.textContent = `${Number(speedInput.value).toFixed(1)}x`;
