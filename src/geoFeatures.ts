@@ -43,7 +43,7 @@ const MIN_COUNTRY_LABEL_AREA_PX = 1400;
 export function drawCountryLabels(ctx: CanvasRenderingContext2D, project: Projection['project'], scale = 1) {
   const { countries } = getEuropeGeoData();
   ctx.save();
-  ctx.fillStyle = 'rgba(35,45,35,0.8)';
+  ctx.fillStyle = 'rgba(76,66,61,0.82)';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.font = `700 ${13 * scale}px system-ui, sans-serif`;
@@ -370,7 +370,7 @@ export function drawSeaLabels(
   scale = 1
 ) {
   ctx.save();
-  ctx.fillStyle = 'rgba(255,255,255,0.6)';
+  ctx.fillStyle = 'rgba(115,177,198,0.62)';
   ctx.font = `italic 700 ${13 * scale}px system-ui, sans-serif`;
   ctx.textAlign = 'center';
   for (const sea of SEAS) {

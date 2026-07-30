@@ -229,17 +229,11 @@ export async function generateVideo(data: TripData, opts: GenerateOptions): Prom
     drawMountainOverlays(ctx, project, camT, CANVAS_WIDTH, CANVAS_HEIGHT);
     drawCityOverlays(ctx, project, cityOverlays, camT, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-    if (startPoint) {
-      drawCityMarker(ctx, data.startCity, startPoint, project, '🚩', CANVAS_WIDTH, {
-        slideOutT: camT,
-        side: 'left'
-      });
+    if (camT <= 0.02 && startPoint) {
+      drawCityMarker(ctx, data.startCity, startPoint, project, '🚩', CANVAS_WIDTH);
     }
-    if (endPoint) {
-      drawCityMarker(ctx, data.endCity, endPoint, project, '🏁', CANVAS_WIDTH, {
-        slideOutT: camT,
-        side: 'right'
-      });
+    if (camT <= 0.02 && endPoint) {
+      drawCityMarker(ctx, data.endCity, endPoint, project, '🏁', CANVAS_WIDTH);
     }
 
     // Drawn after the start/end pins so the rider is always visible on top, even when it

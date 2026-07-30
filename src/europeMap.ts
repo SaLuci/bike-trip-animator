@@ -29,12 +29,45 @@ interface MountainPointInfo {
   featurecla: string;
 }
 
+interface StyledMountainPointInfo extends MountainPointInfo {
+  countryName: string;
+  hue: number;
+  baseSaturation: number;
+  baseLightness: number;
+}
+
 const topology = countries10m as unknown as Topology<{ countries: GeometryObject }>;
 const MOUNTAIN_POINTS = mountainData as MountainPointInfo[];
+const EUROPE_RELIEF_BOUNDS = { minLon: -20, maxLon: 45, minLat: 30, maxLat: 72 } as const;
 
 let cachedCountries: GeoFeatureCollection | null = null;
 let cachedBorders: GeoMultiLineString | null = null;
 let cachedCountryReliefByName: Map<string, number> | null = null;
+let cachedStyledMountainPoints: StyledMountainPointInfo[] | null = null;
+
+async function loadReliefRaster() {
+  const img = new Image();
+  img.decoding = 'async';
+  img.src = new URL('./data/europeRelief50m.png', import.meta.url).href;
+  await img.decode();
+
+  const sampleWidth = 1200;
+  const sampleHeight = Math.round((img.height / img.width) * sampleWidth);
+  const canvas = document.createElement('canvas');
+  canvas.width = sampleWidth;
+  canvas.height = sampleHeight;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Canvas 2D context is not available for relief raster.');
+  ctx.drawImage(img, 0, 0, sampleWidth, sampleHeight);
+  const imageData = ctx.getImageData(0, 0, sampleWidth, sampleHeight);
+  return {
+    width: sampleWidth,
+    height: sampleHeight,
+    data: imageData.data
+  };
+}
+
+const RELIEF_RASTER = await loadReliefRaster();
 
 export function getEuropeGeoData() {
   if (!cachedCountries || !cachedBorders) {
@@ -115,13 +148,109 @@ function getCountryReliefByName(): Map<string, number> {
   return cachedCountryReliefByName;
 }
 
-function countryFillColor(name: string, reliefMeters: number): string {
+const BASE_COUNTRY_PALETTE = [
+  { hue: 352, saturation: 52, lightness: 86 },
+  { hue: 18, saturation: 66, lightness: 84 },
+  { hue: 52, saturation: 84, lightness: 79 },
+  { hue: 84, saturation: 44, lightness: 80 },
+  { hue: 118, saturation: 40, lightness: 79 },
+  { hue: 152, saturation: 38, lightness: 81 },
+  { hue: 188, saturation: 42, lightness: 82 },
+  { hue: 214, saturation: 44, lightness: 83 },
+  { hue: 248, saturation: 34, lightness: 84 },
+  { hue: 286, saturation: 36, lightness: 85 }
+] as const;
+
+function countryColorComponents(name: string, reliefMeters: number): {
+  hue: number;
+  saturation: number;
+  lightness: number;
+} {
   const reliefT = clamp(Math.log1p(reliefMeters) / Math.log1p(4000), 0, 1);
   const hash = hashStr(name);
-  const hue = 88 + (hash % 11) - 5;
-  const saturation = clamp(24 + ((hash >>> 4) % 8) - 4 + reliefT * 8, 18, 38);
-  const lightness = clamp(88 - reliefT * 18 + (((hash >>> 8) % 7) - 3) * 1.1, 60, 90);
+  const base = BASE_COUNTRY_PALETTE[hash % BASE_COUNTRY_PALETTE.length];
+  const hue = (base.hue + ((hash >>> 4) % 7) - 3 + 360) % 360;
+  const saturation = clamp(base.saturation + (((hash >>> 8) % 7) - 3) + reliefT * 6, 28, 78);
+  const lightness = clamp(base.lightness - reliefT * 3 + (((hash >>> 12) % 5) - 2) * 0.9, 66, 90);
+  return { hue, saturation, lightness };
+}
+
+function countryFillColor(name: string, reliefMeters: number): string {
+  const { hue, saturation, lightness } = countryColorComponents(name, reliefMeters);
   return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+}
+
+function getStyledMountainPoints(): StyledMountainPointInfo[] {
+  if (!cachedStyledMountainPoints) {
+    const { countries } = getEuropeGeoData();
+    const reliefByName = getCountryReliefByName();
+    cachedStyledMountainPoints = MOUNTAIN_POINTS.map((point) => {
+      let countryName = '';
+      for (const feature of countries.features) {
+        if (!feature.geometry || !feature.properties?.name) continue;
+        const geom = feature.geometry as { type: string; coordinates: unknown };
+        if (pointInGeometry(point.lon, point.lat, geom)) {
+          countryName = feature.properties.name;
+          break;
+        }
+      }
+      const reliefMeters = reliefByName.get(countryName) ?? point.elevation;
+      const components = countryColorComponents(countryName || point.name, reliefMeters);
+      return {
+        ...point,
+        countryName,
+        hue: components.hue,
+        baseSaturation: components.saturation,
+        baseLightness: components.lightness
+      };
+    });
+  }
+  return cachedStyledMountainPoints;
+}
+
+function traceProjectedRing(ctx: CanvasRenderingContext2D, ring: Array<[number, number]>) {
+  ring.forEach(([x, y], index) => {
+    if (index === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  });
+  ctx.closePath();
+}
+
+function projectedRingBounds(ring: Array<[number, number]>) {
+  let minX = Number.POSITIVE_INFINITY;
+  let minY = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY;
+  let maxY = Number.NEGATIVE_INFINITY;
+  for (const [x, y] of ring) {
+    if (x < minX) minX = x;
+    if (y < minY) minY = y;
+    if (x > maxX) maxX = x;
+    if (y > maxY) maxY = y;
+  }
+  return { minX, minY, maxX, maxY };
+}
+
+function sqDistanceToSegment(
+  px: number,
+  py: number,
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number
+): number {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  if (Math.abs(dx) < 1e-6 && Math.abs(dy) < 1e-6) {
+    const ox = px - x1;
+    const oy = py - y1;
+    return ox * ox + oy * oy;
+  }
+  const t = clamp(((px - x1) * dx + (py - y1) * dy) / (dx * dx + dy * dy), 0, 1);
+  const cx = x1 + dx * t;
+  const cy = y1 + dy * t;
+  const ox = px - cx;
+  const oy = py - cy;
+  return ox * ox + oy * oy;
 }
 
 function traceAllLand(ctx: CanvasRenderingContext2D, project: Projection['project']) {
@@ -144,69 +273,67 @@ function traceAllLand(ctx: CanvasRenderingContext2D, project: Projection['projec
 export function drawTerrainRelief(ctx: CanvasRenderingContext2D, project: Projection['project'], strokeScale = 1) {
   const width = ctx.canvas.width;
   const height = ctx.canvas.height;
+  const step = Math.max(2, Math.round(strokeScale * 0.8));
+  const lonSpan = EUROPE_RELIEF_BOUNDS.maxLon - EUROPE_RELIEF_BOUNDS.minLon;
+  const latSpan = EUROPE_RELIEF_BOUNDS.maxLat - EUROPE_RELIEF_BOUNDS.minLat;
+  const reliefLayer = document.createElement('canvas');
+  reliefLayer.width = width;
+  reliefLayer.height = height;
+  const reliefCtx = reliefLayer.getContext('2d');
+  if (!reliefCtx) return;
+
+  for (let sy = 0; sy < RELIEF_RASTER.height - step; sy += step) {
+    const latNorth = EUROPE_RELIEF_BOUNDS.maxLat - (sy / RELIEF_RASTER.height) * latSpan;
+    const latSouth = EUROPE_RELIEF_BOUNDS.maxLat - ((sy + step) / RELIEF_RASTER.height) * latSpan;
+
+    for (let sx = 0; sx < RELIEF_RASTER.width - step; sx += step) {
+      const sampleX = Math.min(RELIEF_RASTER.width - 1, sx + Math.floor(step / 2));
+      const sampleY = Math.min(RELIEF_RASTER.height - 1, sy + Math.floor(step / 2));
+      const idx = (sampleY * RELIEF_RASTER.width + sampleX) * 4;
+      const value = RELIEF_RASTER.data[idx] / 255;
+
+      const shadow = clamp((0.74 - value) / 0.34, 0, 1);
+      const highlight = clamp((value - 0.72) / 0.18, 0, 1);
+      if (shadow < 0.03 && highlight < 0.03) continue;
+
+      const lonWest = EUROPE_RELIEF_BOUNDS.minLon + (sx / RELIEF_RASTER.width) * lonSpan;
+      const lonEast = EUROPE_RELIEF_BOUNDS.minLon + ((sx + step) / RELIEF_RASTER.width) * lonSpan;
+      const [x1, y1] = project(lonWest, latNorth);
+      const [x2, y2] = project(lonEast, latNorth);
+      const [x3, y3] = project(lonEast, latSouth);
+      const [x4, y4] = project(lonWest, latSouth);
+
+      if (shadow >= 0.03) {
+        reliefCtx.fillStyle = `rgba(0,0,0,${0.28 * shadow})`;
+        reliefCtx.beginPath();
+        reliefCtx.moveTo(x1, y1);
+        reliefCtx.lineTo(x2, y2);
+        reliefCtx.lineTo(x3, y3);
+        reliefCtx.lineTo(x4, y4);
+        reliefCtx.closePath();
+        reliefCtx.fill();
+      }
+
+      if (highlight >= 0.03) {
+        reliefCtx.fillStyle = `rgba(255,255,255,${0.14 * highlight})`;
+        reliefCtx.beginPath();
+        reliefCtx.moveTo(x1, y1);
+        reliefCtx.lineTo(x2, y2);
+        reliefCtx.lineTo(x3, y3);
+        reliefCtx.lineTo(x4, y4);
+        reliefCtx.closePath();
+        reliefCtx.fill();
+      }
+    }
+  }
 
   ctx.save();
   ctx.beginPath();
   traceAllLand(ctx, project);
   ctx.clip('evenodd');
-
-  for (const mountain of MOUNTAIN_POINTS) {
-    const [x, y] = project(mountain.lon, mountain.lat);
-    const margin = 180 * strokeScale;
-    if (x < -margin || x > width + margin || y < -margin || y > height + margin) continue;
-
-    const elevationT = clamp((mountain.elevation - 400) / 3600, 0, 1);
-    const rotation = (((hashStr(mountain.name) >>> 0) % 180) - 90) * (Math.PI / 180);
-    const outerRadius = (44 + elevationT * 150) * strokeScale;
-    const coreRadius = outerRadius * (0.24 + elevationT * 0.08);
-    const stretch = 1.45 + elevationT * 0.7;
-
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.rotate(rotation);
-    ctx.scale(stretch, 0.9);
-    ctx.globalCompositeOperation = 'multiply';
-    const shadow = ctx.createRadialGradient(0, -outerRadius * 0.14, coreRadius * 0.18, 0, 0, outerRadius);
-    shadow.addColorStop(0, 'rgba(128, 78, 36, 0.32)');
-    shadow.addColorStop(0.42, 'rgba(145, 94, 48, 0.18)');
-    shadow.addColorStop(1, 'rgba(145, 94, 48, 0)');
-    ctx.fillStyle = shadow;
-    ctx.beginPath();
-    ctx.arc(0, 0, outerRadius, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-
-    ctx.save();
-    ctx.translate(x + outerRadius * 0.1, y + outerRadius * 0.06);
-    ctx.rotate(rotation + 0.14);
-    ctx.scale(1 + elevationT * 0.35, 0.62);
-    ctx.globalCompositeOperation = 'multiply';
-    const core = ctx.createRadialGradient(0, -coreRadius * 0.12, coreRadius * 0.1, 0, 0, coreRadius);
-    core.addColorStop(0, 'rgba(110, 63, 28, 0.28)');
-    core.addColorStop(0.55, 'rgba(124, 77, 37, 0.16)');
-    core.addColorStop(1, 'rgba(124, 77, 37, 0)');
-    ctx.fillStyle = core;
-    ctx.beginPath();
-    ctx.arc(0, 0, coreRadius, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-
-    ctx.save();
-    ctx.translate(x - outerRadius * 0.18, y - outerRadius * 0.16);
-    ctx.rotate(rotation - 0.18);
-    ctx.scale(stretch * 0.9, 0.8);
-    ctx.globalCompositeOperation = 'screen';
-    const highlight = ctx.createRadialGradient(0, 0, 0, 0, 0, outerRadius * 0.85);
-    highlight.addColorStop(0, 'rgba(255, 245, 220, 0.18)');
-    highlight.addColorStop(0.45, 'rgba(255, 245, 220, 0.06)');
-    highlight.addColorStop(1, 'rgba(255, 245, 220, 0)');
-    ctx.fillStyle = highlight;
-    ctx.beginPath();
-    ctx.arc(0, 0, outerRadius * 0.85, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-  }
-
+  ctx.filter = `blur(${Math.max(2, strokeScale * 0.9)}px)`;
+  ctx.drawImage(reliefLayer, 0, 0);
+  ctx.filter = 'none';
   ctx.restore();
 }
 

@@ -41,16 +41,16 @@ export const RENDER_MAX_POINTS_CONTEXT = 700;
 
 // Cartoon color palette.
 export const COLORS = {
-  ocean: '#7ec8e3',
+  ocean: '#c9e6ee',
   land: ['#bfe3a4', '#b5dd98', '#c9e8ae', '#aedb92'],
-  landStroke: '#4f7a3d',
-  borderDash: 'rgba(255,255,255,0.8)',
+  landStroke: '#8ca2c6',
+  borderDash: 'rgba(147,183,204,0.68)',
   allDaysRoute: 'rgba(90,98,107,0.85)',
   previousDaysRoute: '#ffa94d',
   currentDayRoute: '#f94144',
   pillBg: 'rgba(255,255,255,0.92)',
   pillText: '#22303c',
-  mountain: '#8d99ae',
-  mountainOutline: '#33333f'
+  mountain: '#c8a17c',
+  mountainOutline: '#75573d'
 } as const;
 
