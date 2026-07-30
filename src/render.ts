@@ -420,13 +420,14 @@ export function drawCenteredKmCounter(
     numPair(todayKm, flyUpT, cy);
 
   } else if (xfade < 0.25) {
-    // SMASH: two numbers converge very fast. Numbers only — no labels.
+    // SMASH: two numbers converge and fade out into the flash — no overlap.
     const convergeT = easeOut3(xfade / 0.25);
+    const fadeOut   = 1 - convergeT;          // both numbers fade as they converge
     const gap = nPx * 0.52;
     const prevY  = cy - gap * (1 - convergeT);
     const todayY = cy + gap * (1 - convergeT);
 
-    // Previous: smaller, gold
+    // Previous: smaller, gold, fades out
     const pFontPx = nPx * 0.52;
     const pUnitPx = uPx * 0.52;
     const pStr = formatKm(previousKm);
@@ -435,7 +436,7 @@ export function drawCenteredKmCounter(
     ctx.font = `500 ${pUnitPx}px system-ui,-apple-system,"Segoe UI",sans-serif`;
     const puw = ctx.measureText(' km').width;
     const psx = cx - (pnw + puw) / 2;
-    ctx.globalAlpha = flyUpT * outerAlpha;
+    ctx.globalAlpha = flyUpT * outerAlpha * fadeOut;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
     ctx.shadowColor = 'rgba(0,0,0,0.45)';
@@ -449,9 +450,9 @@ export function drawCenteredKmCounter(
     ctx.fillText(' km', psx + pnw, prevY + (pFontPx - pUnitPx) * 0.3);
     ctx.globalAlpha = 1;
 
-    // "+" centred in the visual gap between the two numbers, same colour as main counter
-    const plusY = cy - nPx * 0.12; // corrects for previous being smaller than today
-    ctx.globalAlpha = flyUpT * outerAlpha;
+    // "+" fades out with the numbers
+    const plusY = cy - nPx * 0.12;
+    ctx.globalAlpha = flyUpT * outerAlpha * fadeOut;
     ctx.font = `600 ${nPx * 0.38}px system-ui,-apple-system,"Segoe UI",sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
@@ -459,8 +460,8 @@ export function drawCenteredKmCounter(
     ctx.fillText('+', cx, plusY);
     ctx.globalAlpha = 1;
 
-    // Today: full size
-    numPair(todayKm, flyUpT, todayY);
+    // Today: full size, fades out
+    numPair(todayKm, flyUpT * fadeOut, todayY);
 
   } else if (xfade < 0.38) {
     // Flash!
