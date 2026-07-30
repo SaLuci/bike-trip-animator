@@ -345,21 +345,26 @@ export async function generateVideo(data: TripData, opts: GenerateOptions): Prom
   }
 
   // ── PHASE 2: Replay at a locked frame rate into the recorder ────────────────
-  // Because every frame is already rendered, the canvas → captureFrame timing
-  // is trivially consistent: no variable render cost, no duplicate frames.
+  // Target-time tracking: each captureFrame() is scheduled at its exact wall-clock
+  // deadline so that slow frames (e.g. createImageBitmap on mobile) automatically
+  // shorten the next sleep, keeping total video duration consistent across devices.
   onStatus('Recording video…');
   await sleep(FRAME_DELAY_MS * 2);
   recorder.start();
   await sleep(FRAME_DELAY_MS);
 
+  const replayStart = performance.now();
   for (let i = 0; i < frameBlobs.length; i++) {
     const bmp = await createImageBitmap(frameBlobs[i]);
     ctx.resetTransform();
     ctx.drawImage(bmp, 0, 0, canvas.width, canvas.height);
     bmp.close();
     recorder.captureFrame();
-    await sleep(FRAME_DELAY_MS);
-    onProgress(0.8 + (i + 1) / frameBlobs.length * 0.2); // 80→100 % during recording
+    // Sleep only for whatever time remains until this frame's deadline,
+    // so late frames on slow devices don't stretch the video duration.
+    const deadline = replayStart + (i + 1) * FRAME_DELAY_MS;
+    await sleep(Math.max(0, deadline - performance.now()));
+    onProgress(0.8 + (i + 1) / frameBlobs.length * 0.2);
   }
 
   onStatus('Finishing up…');
