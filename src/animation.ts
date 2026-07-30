@@ -22,7 +22,7 @@ import { ensureHydrologyAssetsLoaded, drawLakeLabelOverlays } from './hydrology'
 import {
   drawPolyline,
   drawBikeMarker,
-  drawCityMarker,
+  drawLabelPill,
   drawStatsBar,
   drawDayTitle,
   drawExplosion,  drawCenteredKmCounter,  getRiddenTextAnchor
@@ -254,10 +254,32 @@ export async function generateVideo(data: TripData, opts: GenerateOptions): Prom
     }
 
     drawMountainOverlays(ctx, project, camT, CANVAS_WIDTH, CANVAS_HEIGHT);
-    drawCityOverlays(ctx, project, cityOverlays, camT, CANVAS_WIDTH, CANVAS_HEIGHT);
+    // Suppress nearby-city dots once the route is complete (avoids a stray dot at the endpoint)
+    const cityCamT = routeProgress >= 1 ? Math.max(camT, 0.72) : camT;
+    drawCityOverlays(ctx, project, cityOverlays, cityCamT, CANVAS_WIDTH, CANVAS_HEIGHT);
     drawLakeLabelOverlays(ctx, project, lakeLabelBounds, camT);
 
     if (currentPoint) drawBikeMarker(ctx, currentPoint, project, facingLeft, data.riderEmoji);
+
+    // Start / end city names — pill labels, bigger than map city overlays, no icons
+    if (camT <= 0.02 && startPoint && data.startCity.trim()) {
+      const [sx, sy] = project(startPoint.lon, startPoint.lat);
+      const fontPx = 22;
+      ctx.font = `700 ${fontPx}px system-ui,-apple-system,"Segoe UI",sans-serif`;
+      const tw = ctx.measureText(data.startCity.trim()).width + fontPx * 1.2;
+      const lx = Math.max(tw / 2 + 12, Math.min(CANVAS_WIDTH - tw / 2 - 12, sx));
+      const ly = Math.max(24, sy - 44);
+      drawLabelPill(ctx, data.startCity.trim(), lx, ly, fontPx);
+    }
+    if (routeProgress >= 1 && camT <= 0.02 && endPoint && data.endCity.trim()) {
+      const [ex, ey] = project(endPoint.lon, endPoint.lat);
+      const fontPx = 22;
+      ctx.font = `700 ${fontPx}px system-ui,-apple-system,"Segoe UI",sans-serif`;
+      const tw = ctx.measureText(data.endCity.trim()).width + fontPx * 1.2;
+      const lx = Math.max(tw / 2 + 12, Math.min(CANVAS_WIDTH - tw / 2 - 12, ex));
+      const ly = Math.max(24, ey - 44);
+      drawLabelPill(ctx, data.endCity.trim(), lx, ly, fontPx);
+    }
 
     drawDayTitle(ctx, data.dayTitle, CANVAS_WIDTH);
 

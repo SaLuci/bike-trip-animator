@@ -185,18 +185,20 @@ export function drawDayTitle(ctx: CanvasRenderingContext2D, title: string, canva
   const r = h / 2;
 
   // Drop shadow
-  ctx.shadowColor = 'rgba(0,0,0,0.32)';
-  ctx.shadowBlur = 14;
-  ctx.shadowOffsetY = 3;
-  // Accent gradient pill
-  const grad = ctx.createLinearGradient(cx - w / 2, cy, cx + w / 2, cy);
-  grad.addColorStop(0, '#f94144');
-  grad.addColorStop(1, '#ff8c42');
+  ctx.shadowColor = 'rgba(0,0,0,0.38)';
+  ctx.shadowBlur = 18;
+  ctx.shadowOffsetY = 4;
+  // Dark glass pill — same language as the stats bar
   roundedRectPath(ctx, cx - w / 2, cy - h / 2, w, h, r);
-  ctx.fillStyle = grad;
+  ctx.fillStyle = 'rgba(8,16,28,0.82)';
   ctx.fill();
   ctx.shadowColor = 'transparent';
   ctx.shadowBlur = 0;
+  ctx.shadowOffsetY = 0;
+  // Frosted top edge
+  roundedRectPath(ctx, cx - w / 2 + 1, cy - h / 2 + 1, w - 2, 2, 1);
+  ctx.fillStyle = 'rgba(255,255,255,0.16)';
+  ctx.fill();
   // White text
   ctx.fillStyle = '#ffffff';
   ctx.textAlign = 'center';
