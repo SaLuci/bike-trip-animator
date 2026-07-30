@@ -42,11 +42,12 @@ const MIN_COUNTRY_LABEL_AREA_PX = 1400;
 /** Writes each country's name centered on its largest landmass, skipping micro-states that would overflow. */
 export function drawCountryLabels(ctx: CanvasRenderingContext2D, project: Projection['project'], scale = 1) {
   const { countries } = getEuropeGeoData();
+  const cLabelPx = 13 * scale;
   ctx.save();
-  ctx.fillStyle = 'rgba(76,66,61,0.82)';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.font = `700 ${13 * scale}px system-ui, sans-serif`;
+  ctx.font = `700 ${cLabelPx}px system-ui, -apple-system, "Segoe UI", sans-serif`;
+  ctx.lineJoin = 'round';
   const minArea = MIN_COUNTRY_LABEL_AREA_PX * scale * scale;
 
   for (const f of countries.features) {
@@ -66,6 +67,10 @@ export function drawCountryLabels(ctx: CanvasRenderingContext2D, project: Projec
       if (!best || c.area > best.area) best = c;
     }
     if (!best || best.area < minArea) continue;
+    ctx.lineWidth = Math.max(2, cLabelPx * 0.22);
+    ctx.strokeStyle = 'rgba(255,255,255,0.72)';
+    ctx.strokeText(f.properties.name.toUpperCase(), best.cx, best.cy);
+    ctx.fillStyle = 'rgba(68,56,48,0.82)';
     ctx.fillText(f.properties.name.toUpperCase(), best.cx, best.cy);
   }
   ctx.restore();
@@ -237,22 +242,33 @@ function drawCityLabel(
 ) {
   ctx.save();
   ctx.globalAlpha = alpha;
-  ctx.fillStyle = '#2b2b33';
+
+  // Dot with subtle drop shadow for depth
+  ctx.shadowColor = 'rgba(0,0,0,0.28)';
+  ctx.shadowBlur = 4 * scale;
+  ctx.shadowOffsetY = 1 * scale;
+  ctx.fillStyle = 'rgba(34,44,68,0.88)';
   ctx.beginPath();
   ctx.arc(x, y, dotRadius, 0, Math.PI * 2);
   ctx.fill();
-  ctx.lineWidth = Math.max(1, 1.1 * scale);
-  ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+  ctx.shadowColor = 'transparent';
+  ctx.shadowBlur = 0;
+  ctx.shadowOffsetY = 0;
+  ctx.lineWidth = Math.max(1.5, 1.5 * scale);
+  ctx.strokeStyle = 'rgba(255,255,255,0.96)';
   ctx.stroke();
 
-  ctx.font = `600 ${fontPx}px system-ui, sans-serif`;
+  // Label: unified halo + themed fill
+  const lx = x + (dotRadius + 5) * scale;
+  ctx.font = `600 ${fontPx}px system-ui, -apple-system, "Segoe UI", sans-serif`;
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
-  ctx.lineWidth = 3 * scale;
-  ctx.strokeStyle = 'rgba(255,255,255,0.82)';
-  ctx.strokeText(name, x + 6 * scale, y);
-  ctx.fillStyle = 'rgba(30,35,30,0.88)';
-  ctx.fillText(name, x + 6 * scale, y);
+  ctx.lineWidth = Math.max(2.5, fontPx * 0.26);
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = 'rgba(255,255,255,0.94)';
+  ctx.strokeText(name, lx, y);
+  ctx.fillStyle = 'rgba(18,26,50,0.90)';
+  ctx.fillText(name, lx, y);
   ctx.restore();
 }
 
@@ -329,15 +345,17 @@ export function drawMountainOverlays(
     ctx.restore();
 
     if (labelAlpha > 0.02 && mountain.elevation >= 900) {
+      const mFontPx = (8.5 + elevationT * 1.8) * scale;
       ctx.save();
       ctx.globalAlpha = labelAlpha * (0.55 + elevationT * 0.45);
-      ctx.font = `600 ${(8.5 + elevationT * 1.8) * scale}px system-ui, sans-serif`;
+      ctx.font = `600 ${mFontPx}px system-ui, -apple-system, "Segoe UI", sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'bottom';
-      ctx.lineWidth = 3 * scale;
-      ctx.strokeStyle = 'rgba(255,255,255,0.82)';
+      ctx.lineWidth = Math.max(2.5, mFontPx * 0.26);
+      ctx.lineJoin = 'round';
+      ctx.strokeStyle = 'rgba(255,255,255,0.94)';
       ctx.strokeText(mountain.name, projected[0], projected[1] - (16 + elevationT * 7) * scale);
-      ctx.fillStyle = 'rgba(54,66,48,0.92)';
+      ctx.fillStyle = 'rgba(38,52,24,0.90)';
       ctx.fillText(mountain.name, projected[0], projected[1] - (16 + elevationT * 7) * scale);
       ctx.restore();
     }
@@ -370,12 +388,17 @@ export function drawSeaLabels(
   scale = 1
 ) {
   ctx.save();
-  ctx.fillStyle = 'rgba(115,177,198,0.62)';
-  ctx.font = `italic 700 ${13 * scale}px system-ui, sans-serif`;
+  ctx.font = `600 ${13 * scale}px system-ui, -apple-system, "Segoe UI", sans-serif`;
   ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.lineJoin = 'round';
   for (const sea of SEAS) {
     if (!inBounds(sea.lon, sea.lat, bounds)) continue;
     const [x, y] = project(sea.lon, sea.lat);
+    ctx.lineWidth = Math.max(2.5, 13 * scale * 0.22);
+    ctx.strokeStyle = 'rgba(180,220,235,0.55)';
+    ctx.strokeText(sea.name.toUpperCase(), x, y);
+    ctx.fillStyle = 'rgba(38,110,148,0.70)';
     ctx.fillText(sea.name.toUpperCase(), x, y);
   }
   ctx.restore();

@@ -114,16 +114,17 @@ export function drawLakeLabelOverlays(
   ctx.globalAlpha = alpha;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
+  ctx.lineJoin = 'round';
   for (const lake of LAKES) {
     if (!lake.name) continue;
     if (!inBounds(lake.cx, lake.cy, bounds)) continue;
     const [lx, ly] = project(lake.cx, lake.cy);
-    const fontPx = clamp(7.6 + Math.log10(Math.max(1, lake.area)) - 5.5, 8, 13) * scale;
-    ctx.font = `italic 600 ${fontPx}px system-ui, sans-serif`;
-    ctx.lineWidth = Math.max(2 * scale, fontPx * 0.16);
-    ctx.strokeStyle = 'rgba(255,255,255,0.88)';
+    const fontPx = clamp(7.6 + Math.log10(Math.max(1, lake.area)) - 5.5, 9, 14) * scale;
+    ctx.font = `600 ${fontPx}px system-ui, -apple-system, "Segoe UI", sans-serif`;
+    ctx.lineWidth = Math.max(2.5, fontPx * 0.26);
+    ctx.strokeStyle = 'rgba(255,255,255,0.94)';
     ctx.strokeText(lake.name, lx, ly);
-    ctx.fillStyle = '#2b6f8f';
+    ctx.fillStyle = 'rgba(10,52,86,0.90)';
     ctx.fillText(lake.name, lx, ly);
   }
   ctx.restore();
