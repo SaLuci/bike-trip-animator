@@ -115,7 +115,9 @@ animateBtn.addEventListener('click', async () => {
         allDaysTracks,
         startCity: startCityInput.value,
         endCity: endCityInput.value,
-        dayTitle: dayTitleInput.value        riderEmoji: riderEmojiInput.value.trim() || '🚴',      },
+        dayTitle: dayTitleInput.value,
+        riderEmoji: riderEmojiInput.value.trim() || '🚴',
+      },
       {
         canvas: previewCanvas,
         speedMultiplier: Number(speedInput.value) || 1,
