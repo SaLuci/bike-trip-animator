@@ -19,12 +19,12 @@ export const FPS = 30;
 export const FRAME_DELAY_MS = Math.round(1000 / FPS);
 export const TRACK_HOLD_SECONDS = 0.2;
 export const ANIMATE_SECONDS = 3.0;
-export const SPLIT_HOLD_SECONDS = 1.0;
+export const SPLIT_HOLD_SECONDS = 1.5;
 export const FLY_UP_SECONDS = 0.6;
 export const EXPLODE_SECONDS = 0.8;
-export const PRE_ZOOM_HOLD_SECONDS = 1.5;
+export const PRE_ZOOM_HOLD_SECONDS = 1.0;
 export const ZOOM_OUT_SECONDS = 2.2;
-export const END_HOLD_SECONDS = 1.5;
+export const END_HOLD_SECONDS = 2.5;
 
 // Animation speed slider bounds/default — a multiplier applied to every *_SECONDS constant
 // above (higher = faster/shorter).
