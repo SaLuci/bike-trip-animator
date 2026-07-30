@@ -59,6 +59,7 @@ export interface TripData {
   startCity: string;
   endCity: string;
   dayTitle: string;
+  riderEmoji: string;
 }
 
 export interface GenerateOptions {
@@ -273,14 +274,14 @@ export async function generateVideo(data: TripData, opts: GenerateOptions): Prom
 
     // Drawn after the start/end pins so the rider is always visible on top, even when it
     // ends up sitting at the exact same spot as the end pin.
-    if (currentPoint) drawBikeMarker(ctx, currentPoint, project, facingLeft);
+    if (currentPoint) drawBikeMarker(ctx, currentPoint, project, facingLeft, data.riderEmoji);
 
     drawDayTitle(ctx, data.dayTitle, CANVAS_WIDTH);
 
     const todayKm = currentDayKm * routeProgress;
     const riddenKm = previousDaysKm + todayKm;
     const remainingKm = totalTripKm !== null ? totalTripKm - riddenKm : null;
-    drawStatsBar(ctx, CANVAS_WIDTH, CANVAS_HEIGHT, previousDaysKm, todayKm, remainingKm, camT, explodeProgress);
+    drawStatsBar(ctx, CANVAS_WIDTH, CANVAS_HEIGHT, previousDaysKm, todayKm, remainingKm, camT, explodeProgress, data.riderEmoji);
     drawExplosion(ctx, riddenAnchor.x, riddenAnchor.y, explodeProgress);
 
     onProgress((frameIdx + 1) / totalFrames);

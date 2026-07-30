@@ -131,19 +131,20 @@ export function drawBikeMarker(
   ctx: CanvasRenderingContext2D,
   point: TrackPoint,
   project: Projection['project'],
-  facingLeft: boolean
+  facingLeft: boolean,
+  emoji = '🚴'
 ) {
   const [x, y] = project(point.lon, point.lat);
   ctx.save();
   ctx.translate(x, y);
-  // The 🚴 glyph faces left by default on most platforms; mirror it when heading rightish.
+  // Most active-travel emoji face left by default; mirror when heading rightish.
   if (!facingLeft) ctx.scale(-1, 1);
   ctx.shadowColor = 'rgba(0,0,0,0.35)';
   ctx.shadowBlur = 6;
   ctx.font = '34px system-ui, sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText('🚴', 0, 0);
+  ctx.fillText(emoji, 0, 0);
   ctx.restore();
 }
 
@@ -182,7 +183,8 @@ export function drawStatsBar(
   todayKm: number,
   remainingKm: number | null,
   remainingAlpha = 1,
-  splitToCombinedProgress = 1
+  splitToCombinedProgress = 1,
+  riderEmoji = '🚴'
 ) {
   const barH = STATS_BAR_HEIGHT;
   const margin = STATS_BAR_MARGIN;
@@ -201,14 +203,14 @@ export function drawStatsBar(
 
   const totalRidden = previousKm + todayKm;
   const hasPrevious = previousKm > 0.05;
-  const combinedText = `🚴 ${formatKm(totalRidden)} km ridden`;
+  const combinedText = `${riderEmoji} ${formatKm(totalRidden)} km ridden`;
   const combinedFontPx = remainingKm !== null ? 26 : 28;
 
   if (hasPrevious) {
     // Before the "explosion", show the two numbers separately (previous total + today's
     // count-up); the explosion then crossfades into the single combined total.
     const crossfade = Math.max(0, Math.min(1, splitToCombinedProgress));
-    const splitText = `🚴 ${formatKm(previousKm)} + ${formatKm(todayKm)} km ridden`;
+    const splitText = `${riderEmoji} ${formatKm(previousKm)} + ${formatKm(todayKm)} km ridden`;
     if (crossfade < 1) {
       ctx.font = '700 22px system-ui, sans-serif';
       ctx.globalAlpha = 1 - crossfade;
