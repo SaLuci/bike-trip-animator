@@ -35,20 +35,26 @@ export interface RecordedVideo {
   extension: string;
 }
 
-/** Records whatever is drawn to `canvas` in real time, at `fps`, until `stop()` is called. */
+/** Records whatever is drawn to `canvas` frame-by-frame. Call `captureFrame()` after each
+ * render to tell the recorder to snapshot the canvas exactly once — this eliminates the
+ * duplicate-frame stutter caused by the browser's own sampling timer. */
 export class CanvasVideoRecorder {
   private readonly recorder: MediaRecorder;
   private readonly chunks: Blob[] = [];
   private readonly format: VideoFormat;
   private readonly finished: Promise<Blob>;
   private resolveFinished!: (blob: Blob) => void;
+  private readonly track: CanvasCaptureMediaStreamTrack;
 
   constructor(canvas: HTMLCanvasElement, fps: number) {
     if (typeof MediaRecorder === 'undefined' || typeof canvas.captureStream !== 'function') {
       throw new Error('This browser does not support recording video from the canvas.');
     }
     this.format = pickSupportedFormat();
-    const stream = canvas.captureStream(fps);
+    // fps=0 → manual mode: the stream only captures a new frame when requestFrame() is called,
+    // so we never get duplicates regardless of how long rendering takes.
+    const stream = canvas.captureStream(0);
+    this.track = stream.getVideoTracks()[0] as CanvasCaptureMediaStreamTrack;
     const options: MediaRecorderOptions = {
       videoBitsPerSecond: pickVideoBitsPerSecond(canvas, fps)
     };
@@ -73,6 +79,11 @@ export class CanvasVideoRecorder {
 
   start() {
     this.recorder.start();
+  }
+
+  /** Call this once per frame, AFTER rendering, to snapshot the canvas into the stream. */
+  captureFrame() {
+    this.track.requestFrame();
   }
 
   async stop(): Promise<RecordedVideo> {

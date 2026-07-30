@@ -207,7 +207,6 @@ export async function generateVideo(data: TripData, opts: GenerateOptions): Prom
   const lakeLabelBounds = trackingVisibleBounds;
 
   for (let frameIdx = 0; frameIdx < totalFrames; frameIdx++) {
-    const frameStart = performance.now();
     let routeProgress: number;
     let explodeProgress: number;
     let camT: number;
@@ -310,11 +309,15 @@ export async function generateVideo(data: TripData, opts: GenerateOptions): Prom
 
     onProgress((frameIdx + 1) / totalFrames);
 
-    // Real-time pacing: subtract the time already spent rendering so the total frame
-    // duration stays at FRAME_DELAY_MS — avoids duplicate captures by the MediaRecorder
-    // when rendering is fast, and avoids spiralling delays when it's slow.
-    const renderMs = performance.now() - frameStart;
-    await sleep(Math.max(0, FRAME_DELAY_MS - renderMs));
+    // Explicitly snapshot this frame into the stream — with captureStream(0) the recorder
+    // only captures when we say so, guaranteeing exactly one frame per render with no duplicates.
+    recorder.captureFrame();
+
+    // Sleep for one frame interval so the MediaRecorder sees the correct frame duration.
+    // We always sleep the full FRAME_DELAY_MS here (not minus render time) because the
+    // frame timestamp in the video is determined by how far apart our captureFrame() calls
+    // are, not by wall-clock render time.
+    await sleep(FRAME_DELAY_MS);
   }
 
   onStatus('Finishing up…');
