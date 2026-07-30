@@ -268,7 +268,7 @@ export async function generateVideo(data: TripData, opts: GenerateOptions): Prom
     if (camT <= 0.02 && startPoint) {
       drawCityMarker(ctx, data.startCity, startPoint, project, '🚩', CANVAS_WIDTH);
     }
-    if (camT <= 0.02 && endPoint) {
+    if (routeProgress >= 1 && camT <= 0.02 && endPoint) {
       drawCityMarker(ctx, data.endCity, endPoint, project, '🏁', CANVAS_WIDTH);
     }
 
