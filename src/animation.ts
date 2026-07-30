@@ -236,9 +236,7 @@ export async function generateVideo(data: TripData, opts: GenerateOptions): Prom
     } else if (frameIdx < trackHoldFrames + animateFrames + splitHoldFrames + explodeFrames + preZoomHoldFrames + zoomOutFrames) {
       routeProgress = 1;
       explodeProgress = 1;
-      camT = easeInOutCubic(
-        (frameIdx - trackHoldFrames - animateFrames - splitHoldFrames - explodeFrames - preZoomHoldFrames) / Math.max(1, zoomOutFrames - 1)
-      );
+      camT = (frameIdx - trackHoldFrames - animateFrames - splitHoldFrames - explodeFrames - preZoomHoldFrames) / Math.max(1, zoomOutFrames - 1);
     } else {
       routeProgress = 1;
       explodeProgress = 1;
