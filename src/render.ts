@@ -59,13 +59,22 @@ function measureLabelPill(ctx: CanvasRenderingContext2D, text: string, fontPx: n
 
 export function drawLabelPill(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, fontPx: number) {
   const { w, h } = measureLabelPill(ctx, text, fontPx);
+  ctx.save();
+  // Soft shadow for depth
+  ctx.shadowColor = 'rgba(0,0,0,0.22)';
+  ctx.shadowBlur = 10;
+  ctx.shadowOffsetY = 2;
   roundedRectPath(ctx, x - w / 2, y - h / 2, w, h, h / 2);
   ctx.fillStyle = COLORS.pillBg;
   ctx.fill();
+  ctx.shadowColor = 'transparent';
+  ctx.shadowBlur = 0;
   ctx.fillStyle = COLORS.pillText;
+  ctx.font = `700 ${fontPx}px system-ui, -apple-system, "Segoe UI", sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(text, x, y);
+  ctx.restore();
 }
 
 export interface CityMarkerLabelOptions {
@@ -90,6 +99,17 @@ export function drawCityMarker(
 
   ctx.save();
   ctx.globalAlpha = alpha;
+  // White circle backdrop behind the pin emoji for legibility
+  ctx.shadowColor = 'rgba(0,0,0,0.28)';
+  ctx.shadowBlur = 10;
+  ctx.shadowOffsetY = 2;
+  ctx.fillStyle = 'rgba(255,255,255,0.92)';
+  ctx.beginPath();
+  ctx.arc(x, y - pinFontPx * 0.48, pinFontPx * 0.58, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.shadowColor = 'transparent';
+  ctx.shadowBlur = 0;
+  ctx.shadowOffsetY = 0;
   ctx.font = `${pinFontPx}px system-ui, sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'bottom';
@@ -139,9 +159,10 @@ export function drawBikeMarker(
   ctx.translate(x, y);
   // Most active-travel emoji face left by default; mirror when heading rightish.
   if (!facingLeft) ctx.scale(-1, 1);
-  ctx.shadowColor = 'rgba(0,0,0,0.35)';
-  ctx.shadowBlur = 6;
-  ctx.font = '34px system-ui, sans-serif';
+  ctx.shadowColor = 'rgba(0,0,0,0.45)';
+  ctx.shadowBlur = 10;
+  ctx.shadowOffsetY = 2;
+  ctx.font = '38px system-ui, sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(emoji, 0, 0);
@@ -151,7 +172,37 @@ export function drawBikeMarker(
 export function drawDayTitle(ctx: CanvasRenderingContext2D, title: string, canvasWidth: number) {
   const trimmed = title.trim();
   if (!trimmed) return;
-  drawLabelPill(ctx, trimmed, canvasWidth / 2, 46, 26);
+  const fontPx = 26;
+  ctx.save();
+  ctx.font = `700 ${fontPx}px system-ui, -apple-system, "Segoe UI", sans-serif`;
+  const metrics = ctx.measureText(trimmed);
+  const paddingX = fontPx * 0.7;
+  const paddingY = fontPx * 0.44;
+  const w = metrics.width + paddingX * 2;
+  const h = fontPx + paddingY * 2;
+  const cx = canvasWidth / 2;
+  const cy = 46;
+  const r = h / 2;
+
+  // Drop shadow
+  ctx.shadowColor = 'rgba(0,0,0,0.32)';
+  ctx.shadowBlur = 14;
+  ctx.shadowOffsetY = 3;
+  // Accent gradient pill
+  const grad = ctx.createLinearGradient(cx - w / 2, cy, cx + w / 2, cy);
+  grad.addColorStop(0, '#f94144');
+  grad.addColorStop(1, '#ff8c42');
+  roundedRectPath(ctx, cx - w / 2, cy - h / 2, w, h, r);
+  ctx.fillStyle = grad;
+  ctx.fill();
+  ctx.shadowColor = 'transparent';
+  ctx.shadowBlur = 0;
+  // White text
+  ctx.fillStyle = '#ffffff';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(trimmed, cx, cy);
+  ctx.restore();
 }
 
 
@@ -193,8 +244,21 @@ export function drawStatsBar(
   const riddenY = remainingKm !== null ? y + barH * 0.34 : y + barH / 2;
 
   ctx.save();
-  roundedRectPath(ctx, margin, y, w, barH, 24);
-  ctx.fillStyle = 'rgba(20,30,40,0.55)';
+
+  // Drop shadow beneath the bar
+  ctx.shadowColor = 'rgba(0,0,0,0.38)';
+  ctx.shadowBlur = 18;
+  ctx.shadowOffsetY = 4;
+  roundedRectPath(ctx, margin, y, w, barH, 26);
+  ctx.fillStyle = 'rgba(8,16,28,0.82)';
+  ctx.fill();
+  ctx.shadowColor = 'transparent';
+  ctx.shadowBlur = 0;
+  ctx.shadowOffsetY = 0;
+
+  // Subtle frosted-glass top-edge highlight
+  roundedRectPath(ctx, margin + 1, y + 1, w - 2, 2, 1);
+  ctx.fillStyle = 'rgba(255,255,255,0.16)';
   ctx.fill();
 
   ctx.fillStyle = '#ffffff';
@@ -204,7 +268,7 @@ export function drawStatsBar(
   const totalRidden = previousKm + todayKm;
   const hasPrevious = previousKm > 0.05;
   const combinedText = `${riderEmoji} ${formatKm(totalRidden)} km ridden`;
-  const combinedFontPx = remainingKm !== null ? 26 : 28;
+  const combinedFontPx = remainingKm !== null ? 28 : 32;
 
   if (hasPrevious) {
     // Before the "explosion", show the two numbers separately (previous total + today's
@@ -212,25 +276,31 @@ export function drawStatsBar(
     const crossfade = Math.max(0, Math.min(1, splitToCombinedProgress));
     const splitText = `${riderEmoji} ${formatKm(previousKm)} + ${formatKm(todayKm)} km ridden`;
     if (crossfade < 1) {
-      ctx.font = '700 22px system-ui, sans-serif';
+      ctx.font = `700 23px system-ui, -apple-system, "Segoe UI", sans-serif`;
       ctx.globalAlpha = 1 - crossfade;
       ctx.fillText(splitText, canvasWidth / 2, riddenY);
     }
     if (crossfade > 0) {
-      ctx.font = `700 ${combinedFontPx}px system-ui, sans-serif`;
+      ctx.font = `700 ${combinedFontPx}px system-ui, -apple-system, "Segoe UI", sans-serif`;
       ctx.globalAlpha = crossfade;
       ctx.fillText(combinedText, canvasWidth / 2, riddenY);
     }
     ctx.globalAlpha = 1;
   } else {
-    ctx.font = `700 ${combinedFontPx}px system-ui, sans-serif`;
+    ctx.font = `700 ${combinedFontPx}px system-ui, -apple-system, "Segoe UI", sans-serif`;
     ctx.fillText(combinedText, canvasWidth / 2, riddenY);
   }
 
   if (remainingKm !== null) {
-    ctx.font = '400 22px system-ui, sans-serif';
+    // Thin separator between the two lines
+    const sepY = y + barH * 0.56;
+    ctx.fillStyle = 'rgba(255,255,255,0.12)';
+    ctx.fillRect(margin + 24, sepY, w - 48, 1);
+
+    ctx.font = `400 20px system-ui, -apple-system, "Segoe UI", sans-serif`;
+    ctx.fillStyle = 'rgba(255,255,255,0.76)';
     ctx.globalAlpha = Math.max(0, Math.min(1, remainingAlpha));
-    ctx.fillText(`🏁 ${formatKm(remainingKm)} km to go`, canvasWidth / 2, y + barH * 0.74);
+    ctx.fillText(`🏁 ${formatKm(remainingKm)} km to go`, canvasWidth / 2, y + barH * 0.76);
     ctx.globalAlpha = 1;
   }
   ctx.restore();
