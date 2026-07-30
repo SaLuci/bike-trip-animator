@@ -22,6 +22,25 @@ export async function ensureHydrologyAssetsLoaded() {
   return true;
 }
 
+/** Quadratic-bezier smooth closed ring — rounds corners so lake outlines look natural. */
+function traceSmoothRing(ctx: CanvasRenderingContext2D, pts: [number, number][]) {
+  const n = pts.length;
+  if (n < 3) return;
+  const mid = (a: [number, number], b: [number, number]): [number, number] => [
+    (a[0] + b[0]) * 0.5,
+    (a[1] + b[1]) * 0.5,
+  ];
+  const start = mid(pts[n - 1], pts[0]);
+  ctx.moveTo(start[0], start[1]);
+  for (let i = 0; i < n; i++) {
+    const curr = pts[i];
+    const next = pts[(i + 1) % n];
+    const m = mid(curr, next);
+    ctx.quadraticCurveTo(curr[0], curr[1], m[0], m[1]);
+  }
+  ctx.closePath();
+}
+
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
@@ -53,6 +72,9 @@ export function drawRivers(
   ctx.restore();
 }
 
+/** Minimum lake area in m² to render (≈5 km²) — filters out tiny dot-like lakes. */
+const MIN_LAKE_AREA = 5_000_000;
+
 export function drawLakes(
   ctx: CanvasRenderingContext2D,
   project: Projection['project'],
@@ -64,14 +86,13 @@ export function drawLakes(
   ctx.strokeStyle = '#5b8cae';
   ctx.lineWidth = 0.9 * scale;
   for (const lake of LAKES) {
+    if (lake.area < MIN_LAKE_AREA) continue;
     const visible = lake.rings[0].some(([lon, lat]) => inBounds(lon, lat, bounds));
     if (!visible) continue;
     ctx.beginPath();
     for (const ring of lake.rings) {
-      const pts = ring.map(([lon, lat]) => project(lon, lat));
-      ctx.moveTo(pts[0][0], pts[0][1]);
-      for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
-      ctx.closePath();
+      const pts = ring.map(([lon, lat]) => project(lon, lat) as [number, number]);
+      traceSmoothRing(ctx, pts);
     }
     ctx.fill('evenodd');
     ctx.stroke();
