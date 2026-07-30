@@ -173,7 +173,26 @@ export async function generateVideo(data: TripData, opts: GenerateOptions): Prom
   const riddenAnchor = getRiddenTextAnchor(CANVAS_WIDTH, CANVAS_HEIGHT, totalTripKm !== null);
 
   onStatus('Recording animation…');
+
+  // Pre-warm: draw the opening frame ONCE before the recorder starts.
+  // This uploads the large basemap texture to the GPU, primes the JS
+  // JIT compiler, and warms the font-rendering cache so frame 0 of the
+  // actual recording renders at full speed with no cold-start stutter.
+  {
+    ctx.setTransform(exportScaleX, 0, 0, exportScaleY, 0, 0);
+    const warmCrop = cropRectFromCamera(trackingParams, CANVAS_WIDTH, CANVAS_HEIGHT, staticParams);
+    ctx.drawImage(basemap, warmCrop.sx, warmCrop.sy, warmCrop.sw, warmCrop.sh, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    if (startPoint) drawCityMarker(ctx, data.startCity, startPoint, (lon, lat) => projectWithParams(trackingParams, lon, lat), '🚩', CANVAS_WIDTH);
+    if (endPoint)   drawCityMarker(ctx, data.endCity,   endPoint,   (lon, lat) => projectWithParams(trackingParams, lon, lat), '🏁', CANVAS_WIDTH);
+    drawDayTitle(ctx, data.dayTitle, CANVAS_WIDTH);
+  }
+  // Give the browser one extra frame-interval to finish any pending GPU
+  // work before the encoder starts, then start recording.
+  await sleep(FRAME_DELAY_MS);
   recorder.start();
+  // One more interval for the MediaRecorder codec to initialise —
+  // avoids dropped/duplicate frames at the very beginning of the clip.
+  await sleep(FRAME_DELAY_MS);
 
   // Persists across frames so a near-vertical stretch of road doesn't make the rider flicker.
   let facingLeft = true;
