@@ -27,6 +27,7 @@ import {
   getRiddenTextAnchor
 } from './render';
 import { CanvasVideoRecorder, type RecordedVideo } from './videoExport';
+import { drawCityOverlays, drawMountainOverlays, selectRouteCityOverlayData } from './geoFeatures';
 import {
   CANVAS_WIDTH,
   CANVAS_HEIGHT,
@@ -115,6 +116,7 @@ export async function generateVideo(data: TripData, opts: GenerateOptions): Prom
     staticBounds,
     STATIC_SUPERSAMPLE
   );
+  const cityOverlays = selectRouteCityOverlayData(data.currentDayPoints);
 
   // Route lines are redrawn every frame (so they stay crisp as the camera zooms), but large
   // context tracks are simplified first since their shape barely changes visually. Distance
@@ -217,6 +219,9 @@ export async function generateVideo(data: TripData, opts: GenerateOptions): Prom
       drawPolyline(ctx, revealed, project, { color: COLORS.currentDayRoute, width: 8 });
       currentPoint = current;
     }
+
+    drawMountainOverlays(ctx, project, camT, CANVAS_WIDTH, CANVAS_HEIGHT);
+    drawCityOverlays(ctx, project, cityOverlays, camT, CANVAS_WIDTH, CANVAS_HEIGHT);
 
     if (startPoint) drawCityMarker(ctx, data.startCity, startPoint, project, '🚩', CANVAS_WIDTH);
     if (endPoint) drawCityMarker(ctx, data.endCity, endPoint, project, '🏁', CANVAS_WIDTH);

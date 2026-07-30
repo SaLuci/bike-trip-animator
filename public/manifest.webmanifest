@@ -1,7 +1,7 @@
 {
   "name": "Bike Trip Animator",
   "short_name": "Bike Trip",
-  "description": "Animate your daily GPX bike rides into a cartoon map GIF.",
+  "description": "Animate your daily GPX bike rides into a cartoon map video.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

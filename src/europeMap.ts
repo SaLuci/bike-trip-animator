@@ -1,5 +1,6 @@
 import * as topojson from 'topojson-client';
-import countries110m from 'world-atlas/countries-110m.json';
+import countries10m from './data/europeCountries10m.topo.json';
+import mountainData from './data/europeMountains10m.json';
 import type { Topology, GeometryObject } from 'topojson-specification';
 import type { LonLatBounds, Projection } from './types';
 import { COLORS } from './constants';
@@ -19,10 +20,21 @@ interface GeoMultiLineString {
   coordinates: Pos[][];
 }
 
-const topology = countries110m as unknown as Topology<{ countries: GeometryObject }>;
+interface MountainPointInfo {
+  name: string;
+  lon: number;
+  lat: number;
+  elevation: number;
+  scalerank: number;
+  featurecla: string;
+}
+
+const topology = countries10m as unknown as Topology<{ countries: GeometryObject }>;
+const MOUNTAIN_POINTS = mountainData as MountainPointInfo[];
 
 let cachedCountries: GeoFeatureCollection | null = null;
 let cachedBorders: GeoMultiLineString | null = null;
+let cachedCountryReliefByName: Map<string, number> | null = null;
 
 export function getEuropeGeoData() {
   if (!cachedCountries || !cachedBorders) {
@@ -39,11 +51,77 @@ export function getEuropeGeoData() {
   return { countries: cachedCountries, borders: cachedBorders };
 }
 
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
 /** Small deterministic hash so each country gets a consistent (but varied) land color. */
 function hashStr(s: string): number {
   let h = 0;
   for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
   return h;
+}
+
+function pointInRing(lon: number, lat: number, ring: Pos[]): boolean {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const xi = ring[i][0];
+    const yi = ring[i][1];
+    const xj = ring[j][0];
+    const yj = ring[j][1];
+    const intersects = yi > lat !== yj > lat && lon < ((xj - xi) * (lat - yi)) / ((yj - yi) || 1e-12) + xi;
+    if (intersects) inside = !inside;
+  }
+  return inside;
+}
+
+function pointInPolygon(lon: number, lat: number, polygon: Pos[][]): boolean {
+  if (polygon.length === 0 || !pointInRing(lon, lat, polygon[0])) return false;
+  for (let index = 1; index < polygon.length; index++) {
+    if (pointInRing(lon, lat, polygon[index])) return false;
+  }
+  return true;
+}
+
+function pointInGeometry(lon: number, lat: number, geom: { type: string; coordinates: unknown }): boolean {
+  if (geom.type === 'Polygon') return pointInPolygon(lon, lat, geom.coordinates as Pos[][]);
+  if (geom.type === 'MultiPolygon') {
+    return (geom.coordinates as Pos[][][]).some((polygon) => pointInPolygon(lon, lat, polygon));
+  }
+  return false;
+}
+
+function getCountryReliefByName(): Map<string, number> {
+  if (!cachedCountryReliefByName) {
+    const { countries } = getEuropeGeoData();
+    cachedCountryReliefByName = new Map<string, number>();
+    for (const feature of countries.features) {
+      const name = feature.properties?.name;
+      if (!name || !feature.geometry) continue;
+      const geom = feature.geometry as { type: string; coordinates: unknown };
+      const elevations = MOUNTAIN_POINTS
+        .filter((point) => pointInGeometry(point.lon, point.lat, geom))
+        .map((point) => point.elevation)
+        .sort((a, b) => b - a);
+
+      let reliefMeters = 80;
+      if (elevations.length > 0) {
+        const avgElevation = elevations.reduce((sum, elevation) => sum + elevation, 0) / elevations.length;
+        reliefMeters = avgElevation * 0.65 + elevations[0] * 0.35;
+      }
+      cachedCountryReliefByName.set(name, reliefMeters);
+    }
+  }
+  return cachedCountryReliefByName;
+}
+
+function countryFillColor(name: string, reliefMeters: number): string {
+  const reliefT = clamp(Math.log1p(reliefMeters) / Math.log1p(4000), 0, 1);
+  const hash = hashStr(name);
+  const hue = 88 + (hash % 11) - 5;
+  const saturation = clamp(28 + ((hash >>> 4) % 9) - 4 + reliefT * 12, 22, 46);
+  const lightness = clamp(84 - reliefT * 28 + (((hash >>> 8) % 7) - 3) * 1.2, 48, 87);
+  return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
 }
 
 function traceRing(ctx: CanvasRenderingContext2D, ring: Pos[], project: Projection['project']) {
@@ -77,6 +155,7 @@ export function drawOceanBackground(ctx: CanvasRenderingContext2D, width: number
  */
 export function drawCountries(ctx: CanvasRenderingContext2D, project: Projection['project'], strokeScale = 1) {
   const { countries } = getEuropeGeoData();
+  const reliefByName = getCountryReliefByName();
   for (const f of countries.features) {
     if (!f.geometry) continue;
     const geom = f.geometry as { type: string; coordinates: unknown };
@@ -86,11 +165,13 @@ export function drawCountries(ctx: CanvasRenderingContext2D, project: Projection
         : geom.type === 'MultiPolygon'
           ? (geom.coordinates as Pos[][][])
           : [];
-    const colorIdx = hashStr(f.properties?.name ?? '') % COLORS.land.length;
+    const countryName = f.properties?.name ?? '';
+    const reliefMeters = reliefByName.get(countryName) ?? 80;
+    const fillColor = countryFillColor(countryName, reliefMeters);
     for (const polygon of polygons) {
       ctx.beginPath();
       for (const ring of polygon) traceRing(ctx, ring, project);
-      ctx.fillStyle = COLORS.land[colorIdx];
+      ctx.fillStyle = fillColor;
       ctx.fill('evenodd');
       ctx.lineJoin = 'round';
       ctx.lineWidth = 2.5 * strokeScale;
@@ -130,7 +211,7 @@ const MOUNTAIN_HINTS: Array<[number, number]> = [
   [12.69, 47.07]
 ];
 
-function drawMountainGlyph(ctx: CanvasRenderingContext2D, cx: number, cy: number, scale: number) {
+export function drawMountainGlyph(ctx: CanvasRenderingContext2D, cx: number, cy: number, scale: number) {
   const s = 30 * scale;
   ctx.save();
   ctx.lineJoin = 'round';

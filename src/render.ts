@@ -110,7 +110,7 @@ export function drawDayTitle(ctx: CanvasRenderingContext2D, title: string, canva
 
 
 function formatKm(km: number): string {
-  return km.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  return Math.round(km).toLocaleString();
 }
 
 const STATS_BAR_HEIGHT = 90;

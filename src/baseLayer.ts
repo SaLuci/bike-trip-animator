@@ -1,15 +1,15 @@
 import type { Projection, LonLatBounds } from './types';
-import { drawOceanBackground, drawCountries, drawCountryBorders, drawMountainHints } from './europeMap';
-import { drawCountryLabels, drawCityMarkers, drawRivers, drawLakes, drawSeaLabels } from './geoFeatures';
+import { drawOceanBackground, drawCountries, drawCountryBorders } from './europeMap';
+import { drawCountryLabels, drawRivers, drawLakes, drawSeaLabels } from './geoFeatures';
 
 /**
- * Renders just the basemap (ocean + countries + rivers/lakes/cities/labels + mountain
- * decorations) once into an offscreen canvas. Routes are intentionally NOT baked in here
+ * Renders the static basemap (ocean + countries + borders + hydrology + static labels)
+ * once into an offscreen canvas. Routes are intentionally NOT baked in here
  * anymore — the camera now pans/zooms during the animation, and route lines stay crisp
  * when redrawn per frame with the current camera projection instead of being cropped out
- * of a pre-rendered bitmap. `strokeScale` should match the supersampling factor used for
- * `width`/`height` relative to the final output canvas, so outlines/mountains/labels keep
- * the right relative thickness/size.
+ * of a pre-rendered bitmap. Cities and mountains are also drawn per frame now so their
+ * visibility can react to the zoom state. `strokeScale` should match the supersampling
+ * factor used for `width`/`height` relative to the final output canvas.
  */
 export function buildBasemapLayer(
   width: number,
@@ -31,8 +31,6 @@ export function buildBasemapLayer(
   drawCountryLabels(ctx, project, strokeScale);
   drawRivers(ctx, project, bounds, strokeScale);
   drawLakes(ctx, project, bounds, strokeScale);
-  drawMountainHints(ctx, project, bounds, strokeScale);
-  drawCityMarkers(ctx, project, bounds, strokeScale);
 
   return canvas;
 }
