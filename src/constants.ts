@@ -15,7 +15,7 @@ export const STATIC_SUPERSAMPLE = 2;
 // Animation timing (before the speed slider's multiplier is applied): first track today's
 // ride zoomed in on its own, a quick "explosion" celebrates today's total, then pull back
 // to reveal the whole trip while the remaining planned route draws itself in.
-export const FPS = 12;
+export const FPS = 30;
 export const FRAME_DELAY_MS = Math.round(1000 / FPS);
 export const TRACK_HOLD_SECONDS = 0.2;
 export const ANIMATE_SECONDS = 3.0;

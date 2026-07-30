@@ -472,8 +472,20 @@ export function drawCenteredKmCounter(
     ctx.globalAlpha = 1;
 
   } else {
-    // Combined total — no label — slides to stats bar during zoom-out
+    // Combined total grows from the smash point with an overshoot bounce
+    const growT = easeOut3((xfade - 0.38) / 0.62);
+    // easeOutBack: starts at 0, overshoots slightly, settles at 1
+    const c1 = 1.70158;
+    const c3 = c1 + 1;
+    const t1 = growT - 1;
+    const growScale = Math.max(0, 1 + c3 * t1 * t1 * t1 + c1 * t1 * t1);
+
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.scale(growScale, growScale);
+    ctx.translate(-cx, -cy);
     numPair(todayKm + previousKm, flyUpT, cy);
+    ctx.restore();
   }
 
   ctx.restore();

@@ -179,29 +179,6 @@ export async function generateVideo(data: TripData, opts: GenerateOptions): Prom
   const totalFrames = trackHoldFrames + animateFrames + splitHoldFrames + explodeFrames + preZoomHoldFrames + zoomOutFrames + endHoldFrames;
 
   const recorder = new CanvasVideoRecorder(canvas, FPS);
-  const riddenAnchor = getRiddenTextAnchor(CANVAS_WIDTH, CANVAS_HEIGHT, totalTripKm !== null);
-
-  onStatus('Recording animation…');
-
-  // Pre-warm: draw the opening frame ONCE before the recorder starts.
-  // This uploads the large basemap texture to the GPU, primes the JS
-  // JIT compiler, and warms the font-rendering cache so frame 0 of the
-  // actual recording renders at full speed with no cold-start stutter.
-  {
-    ctx.setTransform(exportScaleX, 0, 0, exportScaleY, 0, 0);
-    const warmCrop = cropRectFromCamera(trackingParams, CANVAS_WIDTH, CANVAS_HEIGHT, staticParams);
-    ctx.drawImage(basemap, warmCrop.sx, warmCrop.sy, warmCrop.sw, warmCrop.sh, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-    if (startPoint) drawCityMarker(ctx, data.startCity, startPoint, (lon, lat) => projectWithParams(trackingParams, lon, lat), '🚩', CANVAS_WIDTH);
-    if (endPoint)   drawCityMarker(ctx, data.endCity,   endPoint,   (lon, lat) => projectWithParams(trackingParams, lon, lat), '🏁', CANVAS_WIDTH);
-    drawDayTitle(ctx, data.dayTitle, CANVAS_WIDTH);
-  }
-  // Give the browser one extra frame-interval to finish any pending GPU
-  // work before the encoder starts, then start recording.
-  await sleep(FRAME_DELAY_MS);
-  recorder.start();
-  // One more interval for the MediaRecorder codec to initialise —
-  // avoids dropped/duplicate frames at the very beginning of the clip.
-  await sleep(FRAME_DELAY_MS);
 
   // Persists across frames so a near-vertical stretch of road doesn't make the rider flicker.
   let facingLeft = true;
@@ -209,8 +186,13 @@ export async function generateVideo(data: TripData, opts: GenerateOptions): Prom
   // to that camera's bounds so we don't iterate over all of Europe every frame.
   const lakeLabelBounds = trackingVisibleBounds;
 
+  // ── PHASE 1: Pre-render every frame to a WebP blob ──────────────────────────
+  // Rendering is done at whatever speed the device manages; timing doesn't matter
+  // here because the blobs are played back at a locked frame rate in Phase 2.
+  onStatus('Pre-rendering frames…');
+  const frameBlobs: Blob[] = [];
+
   for (let frameIdx = 0; frameIdx < totalFrames; frameIdx++) {
-    const frameStart = performance.now();
     let routeProgress: number;
     let explodeProgress: number;
     let camT: number;
@@ -275,15 +257,6 @@ export async function generateVideo(data: TripData, opts: GenerateOptions): Prom
     drawCityOverlays(ctx, project, cityOverlays, camT, CANVAS_WIDTH, CANVAS_HEIGHT);
     drawLakeLabelOverlays(ctx, project, lakeLabelBounds, camT);
 
-    if (camT <= 0.02 && startPoint) {
-      // start pin removed per user preference
-    }
-    if (routeProgress >= 1 && camT <= 0.02 && endPoint) {
-      // end pin removed per user preference
-    }
-
-    // Drawn after the start/end pins so the rider is always visible on top, even when it
-    // ends up sitting at the exact same spot as the end pin.
     if (currentPoint) drawBikeMarker(ctx, currentPoint, project, facingLeft, data.riderEmoji);
 
     drawDayTitle(ctx, data.dayTitle, CANVAS_WIDTH);
@@ -292,12 +265,9 @@ export async function generateVideo(data: TripData, opts: GenerateOptions): Prom
     const riddenKm = previousDaysKm + todayKm;
     const remainingKm = totalTripKm !== null ? totalTripKm - riddenKm : null;
 
-    // Centred km counter: always at screen centre; during zoom-out slides back
-    // down toward the stats bar (reverse fly-up) so it lands there naturally.
     const flyUpT = camT > 0 ? Math.max(0, 1 - camT * 2) : 1;
     drawCenteredKmCounter(ctx, flyUpT, explodeProgress, previousDaysKm, todayKm, CANVAS_WIDTH, CANVAS_HEIGHT, data.riderEmoji, 1);
 
-    // Stats bar: fades in as the camera starts zooming out.
     const statsBarAlpha = Math.min(1, Math.max(0, (camT - 0.1) / 0.2));
     if (statsBarAlpha > 0.01) {
       ctx.save();
@@ -306,20 +276,40 @@ export async function generateVideo(data: TripData, opts: GenerateOptions): Prom
       ctx.restore();
     }
 
-    // Explosion particles follow the centred counter.
     if (previousDaysKm > 0.05) {
       drawExplosion(ctx, CANVAS_WIDTH / 2, CANVAS_HEIGHT * 0.40, explodeProgress);
     }
 
-    onProgress((frameIdx + 1) / totalFrames);
+    // Snapshot the canvas to a WebP blob (async, but we await before moving on)
+    const blob = await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob(
+        (b) => b ? resolve(b) : reject(new Error('Frame capture failed')),
+        'image/webp',
+        0.92
+      );
+    });
+    frameBlobs.push(blob);
+    onProgress((frameIdx + 1) / totalFrames * 0.8); // 0→80 % during pre-render
+    // Yield briefly so the UI stays responsive during the long pre-render
+    await sleep(0);
+  }
 
-    // Snapshot this frame explicitly — captureStream(0) never auto-samples.
+  // ── PHASE 2: Replay at a locked frame rate into the recorder ────────────────
+  // Because every frame is already rendered, the canvas → captureFrame timing
+  // is trivially consistent: no variable render cost, no duplicate frames.
+  onStatus('Recording video…');
+  await sleep(FRAME_DELAY_MS * 2);
+  recorder.start();
+  await sleep(FRAME_DELAY_MS);
+
+  for (let i = 0; i < frameBlobs.length; i++) {
+    const bmp = await createImageBitmap(frameBlobs[i]);
+    ctx.resetTransform();
+    ctx.drawImage(bmp, 0, 0, canvas.width, canvas.height);
+    bmp.close();
     recorder.captureFrame();
-
-    // Subtract render time from the sleep so the gap between captureFrame() calls
-    // stays at FRAME_DELAY_MS regardless of how long rendering took.
-    const renderMs = performance.now() - frameStart;
-    await sleep(Math.max(0, FRAME_DELAY_MS - renderMs));
+    await sleep(FRAME_DELAY_MS);
+    onProgress(0.8 + (i + 1) / frameBlobs.length * 0.2); // 80→100 % during recording
   }
 
   onStatus('Finishing up…');
