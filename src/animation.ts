@@ -17,6 +17,7 @@ import {
   DEFAULT_EUROPE_BOUNDS
 } from './geo';
 import { buildBasemapLayer } from './baseLayer';
+import { ensureHydrologyAssetsLoaded } from './hydrology';
 import {
   drawPolyline,
   drawBikeMarker,
@@ -27,6 +28,7 @@ import {
   getRiddenTextAnchor
 } from './render';
 import { CanvasVideoRecorder, type RecordedVideo } from './videoExport';
+import { ensureEuropeMapAssetsLoaded } from './europeMap';
 import { drawCityOverlays, drawMountainOverlays, selectRouteCityOverlayData } from './geoFeatures';
 import {
   CANVAS_WIDTH,
@@ -106,6 +108,7 @@ export async function generateVideo(data: TripData, opts: GenerateOptions): Prom
     : fullParams;
 
   onStatus('Drawing the map…');
+  await Promise.all([ensureEuropeMapAssetsLoaded(), ensureHydrologyAssetsLoaded()]);
   // The basemap (countries/rivers/cities/mountains) is pre-rendered once at bounds that
   // cover BOTH the tracking and full-tour framings (a plain fullBounds isn't always enough
   // — e.g. with no previous/all-days data, the padded tracking view can poke outside a tight

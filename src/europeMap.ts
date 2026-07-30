@@ -44,12 +44,13 @@ interface ReliefRasterInfo {
 
 const topology = countries10m as unknown as Topology<{ countries: GeometryObject }>;
 const MOUNTAIN_POINTS = mountainData as MountainPointInfo[];
-const EUROPE_RELIEF_BOUNDS = { minLon: -20, maxLon: 45, minLat: 30, maxLat: 72 } as const;
+export const EUROPE_RASTER_BOUNDS = { minLon: -20, maxLon: 45, minLat: 30, maxLat: 72 } as const;
 
 let cachedCountries: GeoFeatureCollection | null = null;
 let cachedBorders: GeoMultiLineString | null = null;
 let cachedCountryReliefByName: Map<string, number> | null = null;
 let cachedStyledMountainPoints: StyledMountainPointInfo[] | null = null;
+let reliefRaster: ReliefRasterInfo | null = null;
 
 async function loadReliefRaster(): Promise<ReliefRasterInfo> {
   const img = new Image();
@@ -63,7 +64,12 @@ async function loadReliefRaster(): Promise<ReliefRasterInfo> {
   };
 }
 
-const RELIEF_RASTER = await loadReliefRaster();
+const reliefRasterPromise = loadReliefRaster();
+
+export async function ensureEuropeMapAssetsLoaded() {
+  if (!reliefRaster) reliefRaster = await reliefRasterPromise;
+  return reliefRaster;
+}
 
 export function getEuropeGeoData() {
   if (!cachedCountries || !cachedBorders) {
@@ -222,33 +228,34 @@ function traceAllLand(ctx: CanvasRenderingContext2D, project: Projection['projec
 }
 
 export function drawTerrainRelief(ctx: CanvasRenderingContext2D, project: Projection['project'], strokeScale = 1) {
+  if (!reliefRaster) return;
   const reliefBandHeight = Math.max(2, Math.round(strokeScale * 1.2));
-  const lonSpan = EUROPE_RELIEF_BOUNDS.maxLon - EUROPE_RELIEF_BOUNDS.minLon;
-  const latSpan = EUROPE_RELIEF_BOUNDS.maxLat - EUROPE_RELIEF_BOUNDS.minLat;
-  const [dstLeft] = project(EUROPE_RELIEF_BOUNDS.minLon, EUROPE_RELIEF_BOUNDS.maxLat);
-  const [dstRight] = project(EUROPE_RELIEF_BOUNDS.maxLon, EUROPE_RELIEF_BOUNDS.maxLat);
+  const lonSpan = EUROPE_RASTER_BOUNDS.maxLon - EUROPE_RASTER_BOUNDS.minLon;
+  const latSpan = EUROPE_RASTER_BOUNDS.maxLat - EUROPE_RASTER_BOUNDS.minLat;
+  const [dstLeft] = project(EUROPE_RASTER_BOUNDS.minLon, EUROPE_RASTER_BOUNDS.maxLat);
+  const [dstRight] = project(EUROPE_RASTER_BOUNDS.maxLon, EUROPE_RASTER_BOUNDS.maxLat);
 
   ctx.save();
   ctx.beginPath();
   traceAllLand(ctx, project);
   ctx.clip('evenodd');
   ctx.globalCompositeOperation = 'multiply';
-  ctx.globalAlpha = 0.34;
+  ctx.globalAlpha = 0.48;
   ctx.imageSmoothingEnabled = true;
 
-  for (let sy = 0; sy < RELIEF_RASTER.height - reliefBandHeight; sy += reliefBandHeight) {
-    const latNorth = EUROPE_RELIEF_BOUNDS.maxLat - (sy / RELIEF_RASTER.height) * latSpan;
-    const latSouth = EUROPE_RELIEF_BOUNDS.maxLat - ((sy + reliefBandHeight) / RELIEF_RASTER.height) * latSpan;
-    const [, dstTop] = project(EUROPE_RELIEF_BOUNDS.minLon, latNorth);
-    const [, dstBottom] = project(EUROPE_RELIEF_BOUNDS.minLon, latSouth);
+  for (let sy = 0; sy < reliefRaster.height - reliefBandHeight; sy += reliefBandHeight) {
+    const latNorth = EUROPE_RASTER_BOUNDS.maxLat - (sy / reliefRaster.height) * latSpan;
+    const latSouth = EUROPE_RASTER_BOUNDS.maxLat - ((sy + reliefBandHeight) / reliefRaster.height) * latSpan;
+    const [, dstTop] = project(EUROPE_RASTER_BOUNDS.minLon, latNorth);
+    const [, dstBottom] = project(EUROPE_RASTER_BOUNDS.minLon, latSouth);
     const destHeight = dstBottom - dstTop;
     if (Math.abs(destHeight) < 0.5) continue;
 
     ctx.drawImage(
-      RELIEF_RASTER.image,
+      reliefRaster.image,
       0,
       sy,
-      RELIEF_RASTER.width,
+      reliefRaster.width,
       reliefBandHeight,
       dstLeft,
       dstTop,
@@ -258,20 +265,20 @@ export function drawTerrainRelief(ctx: CanvasRenderingContext2D, project: Projec
   }
 
   ctx.globalCompositeOperation = 'screen';
-  ctx.globalAlpha = 0.08;
+  ctx.globalAlpha = 0.16;
   ctx.filter = `blur(${Math.max(1.5, strokeScale * 0.6)}px)`;
-  for (let sy = 0; sy < RELIEF_RASTER.height - reliefBandHeight; sy += reliefBandHeight * 2) {
-    const latNorth = EUROPE_RELIEF_BOUNDS.maxLat - (sy / RELIEF_RASTER.height) * latSpan;
-    const latSouth = EUROPE_RELIEF_BOUNDS.maxLat - ((sy + reliefBandHeight * 2) / RELIEF_RASTER.height) * latSpan;
-    const [, dstTop] = project(EUROPE_RELIEF_BOUNDS.minLon, latNorth);
-    const [, dstBottom] = project(EUROPE_RELIEF_BOUNDS.minLon, latSouth);
+  for (let sy = 0; sy < reliefRaster.height - reliefBandHeight; sy += reliefBandHeight * 2) {
+    const latNorth = EUROPE_RASTER_BOUNDS.maxLat - (sy / reliefRaster.height) * latSpan;
+    const latSouth = EUROPE_RASTER_BOUNDS.maxLat - ((sy + reliefBandHeight * 2) / reliefRaster.height) * latSpan;
+    const [, dstTop] = project(EUROPE_RASTER_BOUNDS.minLon, latNorth);
+    const [, dstBottom] = project(EUROPE_RASTER_BOUNDS.minLon, latSouth);
     const destHeight = dstBottom - dstTop;
     if (Math.abs(destHeight) < 0.5) continue;
     ctx.drawImage(
-      RELIEF_RASTER.image,
+      reliefRaster.image,
       0,
       sy,
-      RELIEF_RASTER.width,
+      reliefRaster.width,
       reliefBandHeight * 2,
       dstLeft,
       dstTop,
