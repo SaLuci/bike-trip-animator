@@ -1,6 +1,7 @@
 import type { TrackPoint } from './types';
 import {
   boundsOfTracks,
+  cameraVisibleBounds,
   computeProjectionParams,
   cropRectFromCamera,
   cumulativeDistances,
@@ -113,7 +114,11 @@ export async function generateVideo(data: TripData, opts: GenerateOptions): Prom
   // cover BOTH the tracking and full-tour framings (a plain fullBounds isn't always enough
   // — e.g. with no previous/all-days data, the padded tracking view can poke outside a tight
   // fullBounds), supersampled so it still looks crisp when the camera crops into it tightly.
-  const staticBounds = unionBounds(fullBounds, trackingBounds);
+  // We union the raw bounds AND the actual canvas-visible geo extent of the tracking camera
+  // (which is larger than the raw bounds due to TRACKING_PADDING), so black borders never
+  // appear when today's route covers a large geographic area.
+  const trackingVisibleBounds = cameraVisibleBounds(trackingParams, CANVAS_WIDTH, CANVAS_HEIGHT);
+  const staticBounds = unionBounds(unionBounds(fullBounds, trackingBounds), trackingVisibleBounds);
   const staticWidth = Math.round(CANVAS_WIDTH * STATIC_SUPERSAMPLE * exportScaleX);
   const staticHeight = Math.round(CANVAS_HEIGHT * STATIC_SUPERSAMPLE * exportScaleY);
   const staticParams = computeProjectionParams(staticBounds, staticWidth, staticHeight, FULL_PADDING);

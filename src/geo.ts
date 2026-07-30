@@ -274,6 +274,31 @@ export function easeInOutCubic(t: number): number {
 }
 
 /**
+ * Returns the geographic lon/lat bounds that are visible on-screen for a given set of
+ * projection params and canvas size.  This is the inverse of computeProjectionParams:
+ * it maps the four canvas corners back through the projection to find the actual extents
+ * that will be rendered — including any padding/margins around the data area.
+ */
+export function cameraVisibleBounds(
+  params: ProjectionParams,
+  canvasWidth: number,
+  canvasHeight: number
+): LonLatBounds {
+  const xLeft  = params.x1 + (0            - params.offsetX) / params.scale;
+  const xRight = params.x1 + (canvasWidth  - params.offsetX) / params.scale;
+  const yTop   = params.y2 - (0            - params.offsetY) / params.scale;
+  const yBot   = params.y2 - (canvasHeight - params.offsetY) / params.scale;
+  // inverse Mercator: lat = (2*atan(exp(y)) - PI/2) / DEG2RAD
+  const invMerc = (y: number) => ((2 * Math.atan(Math.exp(y)) - Math.PI / 2) / DEG2RAD);
+  return {
+    minLon: xLeft  / DEG2RAD,
+    maxLon: xRight / DEG2RAD,
+    minLat: invMerc(yBot),
+    maxLat: invMerc(yTop),
+  };
+}
+
+/**
  * Given the camera's current projection params (defined at output canvas size) and the
  * projection params used to pre-render a (possibly supersampled) static basemap layer,
  * returns the source rectangle to crop from that static layer so that, once scaled up to
