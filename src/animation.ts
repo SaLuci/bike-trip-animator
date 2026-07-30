@@ -43,6 +43,7 @@ import {
   ANIMATE_SECONDS,
   SPLIT_HOLD_SECONDS,
   EXPLODE_SECONDS,
+  PRE_ZOOM_HOLD_SECONDS,
   ZOOM_OUT_SECONDS,
   END_HOLD_SECONDS,
   TRACKING_PADDING,
@@ -168,9 +169,10 @@ export async function generateVideo(data: TripData, opts: GenerateOptions): Prom
   const animateFrames = Math.max(1, Math.round((FPS * ANIMATE_SECONDS) / speed));
   const splitHoldFrames = Math.round((FPS * SPLIT_HOLD_SECONDS) / speed);
   const explodeFrames = Math.max(1, Math.round((FPS * EXPLODE_SECONDS) / speed));
+  const preZoomHoldFrames = Math.round((FPS * PRE_ZOOM_HOLD_SECONDS) / speed);
   const zoomOutFrames = Math.max(1, Math.round((FPS * ZOOM_OUT_SECONDS) / speed));
   const endHoldFrames = Math.round((FPS * END_HOLD_SECONDS) / speed);
-  const totalFrames = trackHoldFrames + animateFrames + splitHoldFrames + explodeFrames + zoomOutFrames + endHoldFrames;
+  const totalFrames = trackHoldFrames + animateFrames + splitHoldFrames + explodeFrames + preZoomHoldFrames + zoomOutFrames + endHoldFrames;
 
   const recorder = new CanvasVideoRecorder(canvas, FPS);
   const riddenAnchor = getRiddenTextAnchor(CANVAS_WIDTH, CANVAS_HEIGHT, totalTripKm !== null);
@@ -226,11 +228,16 @@ export async function generateVideo(data: TripData, opts: GenerateOptions): Prom
       routeProgress = 1;
       explodeProgress = (frameIdx - trackHoldFrames - animateFrames - splitHoldFrames) / Math.max(1, explodeFrames - 1);
       camT = 0;
-    } else if (frameIdx < trackHoldFrames + animateFrames + splitHoldFrames + explodeFrames + zoomOutFrames) {
+    } else if (frameIdx < trackHoldFrames + animateFrames + splitHoldFrames + explodeFrames + preZoomHoldFrames) {
+      // Hold on the combined total before zooming out
+      routeProgress = 1;
+      explodeProgress = 1;
+      camT = 0;
+    } else if (frameIdx < trackHoldFrames + animateFrames + splitHoldFrames + explodeFrames + preZoomHoldFrames + zoomOutFrames) {
       routeProgress = 1;
       explodeProgress = 1;
       camT = easeInOutCubic(
-        (frameIdx - trackHoldFrames - animateFrames - splitHoldFrames - explodeFrames) / Math.max(1, zoomOutFrames - 1)
+        (frameIdx - trackHoldFrames - animateFrames - splitHoldFrames - explodeFrames - preZoomHoldFrames) / Math.max(1, zoomOutFrames - 1)
       );
     } else {
       routeProgress = 1;
