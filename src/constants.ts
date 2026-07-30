@@ -41,7 +41,7 @@ export const COLORS = {
   landStroke: '#4f7a3d',
   borderDash: 'rgba(255,255,255,0.8)',
   allDaysRoute: 'rgba(90,98,107,0.85)',
-  previousDaysRoute: '#ff9e9e',
+  previousDaysRoute: '#ffa94d',
   currentDayRoute: '#f94144',
   pillBg: 'rgba(255,255,255,0.92)',
   pillText: '#22303c',

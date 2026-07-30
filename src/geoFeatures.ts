@@ -259,8 +259,14 @@ const RIVERS: RiverInfo[] = [
   }
 ];
 
-/** Traces an OPEN path through `pts` as a smooth curve (quadratic through each edge's midpoint) instead of sharp straight segments — rivers/lake shores are naturally curvy. */
-function traceSmoothOpenPath(ctx: CanvasRenderingContext2D, pts: Array<[number, number]>) {
+/**
+ * Traces an OPEN path through `pts` as a smooth curve instead of sharp straight segments —
+ * rivers/lake shores are naturally curvy. `smoothness` (0..1) controls how far each curve's
+ * end point sits between the vertex and the next edge's midpoint — 1 is fully rounded
+ * (can blur a distinctive silhouette into a generic blob), lower values stay closer to the
+ * actual vertices so the real shape still reads clearly.
+ */
+function traceSmoothOpenPath(ctx: CanvasRenderingContext2D, pts: Array<[number, number]>, smoothness = 0.45) {
   const n = pts.length;
   if (n === 0) return;
   if (n < 3) {
@@ -271,26 +277,29 @@ function traceSmoothOpenPath(ctx: CanvasRenderingContext2D, pts: Array<[number, 
   for (let i = 1; i < n - 1; i++) {
     const curr = pts[i];
     const next = pts[i + 1];
-    const mid: [number, number] = [(curr[0] + next[0]) / 2, (curr[1] + next[1]) / 2];
-    ctx.quadraticCurveTo(curr[0], curr[1], mid[0], mid[1]);
+    const anchor: [number, number] = [
+      curr[0] + (next[0] - curr[0]) * smoothness,
+      curr[1] + (next[1] - curr[1]) * smoothness
+    ];
+    ctx.quadraticCurveTo(curr[0], curr[1], anchor[0], anchor[1]);
   }
   ctx.lineTo(pts[n - 1][0], pts[n - 1][1]);
 }
 
 /** Same idea as `traceSmoothOpenPath` but for a CLOSED shape (lake outlines). */
-function traceSmoothClosedPath(ctx: CanvasRenderingContext2D, pts: Array<[number, number]>) {
+function traceSmoothClosedPath(ctx: CanvasRenderingContext2D, pts: Array<[number, number]>, smoothness = 0.45) {
   const n = pts.length;
   if (n < 3) return;
-  const midOf = (a: [number, number], b: [number, number]): [number, number] => [
-    (a[0] + b[0]) / 2,
-    (a[1] + b[1]) / 2
+  const anchorOf = (a: [number, number], b: [number, number]): [number, number] => [
+    a[0] + (b[0] - a[0]) * smoothness,
+    a[1] + (b[1] - a[1]) * smoothness
   ];
-  const startMid = midOf(pts[n - 1], pts[0]);
-  ctx.moveTo(startMid[0], startMid[1]);
+  const startAnchor = anchorOf(pts[n - 1], pts[0]);
+  ctx.moveTo(startAnchor[0], startAnchor[1]);
   for (let i = 0; i < n; i++) {
     const curr = pts[i];
     const next = pts[(i + 1) % n];
-    const mid = midOf(curr, next);
+    const mid = anchorOf(curr, next);
     ctx.quadraticCurveTo(curr[0], curr[1], mid[0], mid[1]);
   }
   ctx.closePath();
@@ -341,15 +350,18 @@ const LAKES: LakeInfo[] = [
     name: 'Lake Geneva',
     labelLon: 6.58,
     labelLat: 46.3,
+    // Crescent/boomerang shape — tip-hold points near both ends keep them reading as
+    // pointed river-mouth tips instead of smoothing into a rounded oval.
     outline: [
       [6.15, 46.21],
-      [6.3, 46.28],
-      [6.35, 46.35],
-      [6.5, 46.44],
-      [6.63, 46.52],
-      [6.78, 46.48],
-      [6.85, 46.45],
+      [6.185, 46.228],
+      [6.27, 46.285],
+      [6.38, 46.355],
+      [6.5, 46.43],
+      [6.63, 46.5],
+      [6.7, 46.51],
       [6.92, 46.4],
+      [6.87, 46.385],
       [6.83, 46.36],
       [6.75, 46.3],
       [6.55, 46.25],
@@ -376,34 +388,64 @@ const LAKES: LakeInfo[] = [
     name: 'Lake Garda',
     labelLon: 10.7,
     labelLat: 45.35,
+    // Garda's real shape is a narrow fjord-like arm in the north that widens into a much
+    // broader basin in the south — the extra points near the tip keep it looking pointed
+    // even after corner-smoothing, instead of rounding into a generic uniform blob.
     outline: [
-      [10.7, 45.88],
-      [10.84, 45.85],
-      [10.8, 45.75],
-      [10.78, 45.65],
-      [10.75, 45.55],
-      [10.8, 45.45],
-      [10.7, 45.41],
-      [10.6, 45.44],
-      [10.58, 45.55],
-      [10.6, 45.65],
-      [10.62, 45.78]
+      [10.7, 45.89],
+      [10.73, 45.885],
+      [10.79, 45.83],
+      [10.83, 45.75],
+      [10.86, 45.66],
+      [10.87, 45.58],
+      [10.84, 45.5],
+      [10.76, 45.44],
+      [10.68, 45.41],
+      [10.6, 45.43],
+      [10.57, 45.51],
+      [10.58, 45.6],
+      [10.61, 45.7],
+      [10.65, 45.8],
+      [10.68, 45.86]
     ]
   },
   {
     name: 'Lake Como',
-    labelLon: 9.15,
-    labelLat: 46.06,
+    labelLon: 9.22,
+    labelLat: 45.99,
+    // Como's real shape is a distinctive inverted-Y / trident — one arm north to Colico,
+    // forking into two southern arms (Como city SW, Lecco SE) with a land peninsula
+    // (Triangolo Lariano) poking up between them. Tip-hold points near the 3 arm ends
+    // and the peninsula notch keep that branching silhouette after corner-smoothing,
+    // instead of rounding into a generic oval blob.
     outline: [
       [9.06, 45.81],
-      [9.14, 45.88],
-      [9.2, 45.94],
-      [9.28, 46.0],
-      [9.35, 46.03],
-      [9.32, 45.97],
-      [9.24, 45.9],
-      [9.15, 45.83],
-      [9.09, 45.79]
+      [9.075, 45.813],
+      [9.13, 45.86],
+      [9.18, 45.905],
+      [9.225, 45.945],
+      [9.27, 45.985],
+      [9.31, 46.03],
+      [9.345, 46.08],
+      [9.362, 46.125],
+      [9.365, 46.155],
+      [9.385, 46.148],
+      [9.375, 46.1],
+      [9.345, 46.05],
+      [9.315, 46.0],
+      [9.35, 45.965],
+      [9.38, 45.925],
+      [9.398, 45.885],
+      [9.398, 45.855],
+      [9.378, 45.862],
+      [9.34, 45.895],
+      [9.295, 45.928],
+      [9.25, 45.955],
+      [9.228, 45.945],
+      [9.205, 45.915],
+      [9.175, 45.88],
+      [9.135, 45.85],
+      [9.095, 45.822]
     ]
   },
   {
