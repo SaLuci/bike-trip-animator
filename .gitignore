@@ -1,0 +1,9 @@
+node_modules/
+dist/
+*.log
+test-data/
+
+# Real GPX ride data contains your actual location history — kept local only by default.
+# Remove these lines (or add specific files back with `git add -f`) if you want them
+# included, e.g. as sample data in a public repo.
+*.gpx

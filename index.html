@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#7ec8e3" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="icon.svg" />
+  <title>Bike Trip Animator</title>
+  <link rel="stylesheet" href="src/style.css" />
+</head>
+<body>
+  <main class="app">
+    <header class="app-header">
+      <h1>🚴 Bike Trip Animator</h1>
+      <p class="subtitle">Turn today's GPX ride into an animated map video</p>
+    </header>
+
+    <section class="field">
+      <span class="field-title">📁 Previous Days</span>
+      <span class="field-hint">GPX files already ridden (solid line) — optional, multiple allowed</span>
+      <label for="previousDays" class="file-trigger">Choose GPX files…</label>
+      <input type="file" id="previousDays" accept=".gpx" multiple />
+      <div class="file-summary" id="previousDaysSummary">No files selected</div>
+    </section>
+
+    <section class="field">
+      <span class="field-title">📍 Current Day</span>
+      <span class="field-hint">Today's GPX file(s) — this is what gets animated</span>
+      <label for="currentDay" class="file-trigger">Choose GPX files…</label>
+      <input type="file" id="currentDay" accept=".gpx" multiple />
+      <div class="file-summary" id="currentDaySummary">No files selected</div>
+    </section>
+
+    <section class="field">
+      <span class="field-title">🗺️ All Days</span>
+      <span class="field-hint">Full planned route (dashed line) — optional, multiple allowed</span>
+      <label for="allDays" class="file-trigger">Choose GPX files…</label>
+      <input type="file" id="allDays" accept=".gpx" multiple />
+      <div class="file-summary" id="allDaysSummary">No files selected</div>
+    </section>
+
+    <section class="field">
+      <label for="dayTitle">
+        <span class="field-title">🏷️ Title</span>
+      </label>
+      <input type="text" id="dayTitle" placeholder="e.g. Day 5" />
+    </section>
+
+    <section class="field">
+      <label for="startCity">
+        <span class="field-title">🚩 Start City</span>
+      </label>
+      <input type="text" id="startCity" placeholder="e.g. Steinen" />
+    </section>
+
+    <section class="field">
+      <label for="endCity">
+        <span class="field-title">🏁 End City</span>
+      </label>
+      <input type="text" id="endCity" placeholder="e.g. Senigallia" />
+    </section>
+
+    <section class="field">
+      <label for="animSpeed">
+        <span class="field-title">⚡ Animation Speed</span>
+      </label>
+      <div class="speed-row">
+        <input type="range" id="animSpeed" min="0.5" max="2.5" step="0.1" value="1" />
+        <span class="speed-value" id="animSpeedValue">1.0x</span>
+      </div>
+    </section>
+
+    <button id="animateBtn" class="animate-btn" type="button">🎬 Animate</button>
+
+    <div id="status" class="status" hidden>
+      <div class="status-text" id="statusText"></div>
+      <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+    </div>
+
+    <section class="preview">
+      <canvas id="previewCanvas" width="480" height="854"></canvas>
+    </section>
+
+    <section class="result" id="resultSection" hidden>
+      <video id="resultVideo" autoplay loop muted playsinline controls></video>
+      <button id="saveBtn" class="save-btn" type="button">💾 Save Video</button>
+    </section>
+
+    <div id="errorBox" class="error-box" hidden></div>
+  </main>
+
+  <script type="module" src="src/main.ts"></script>
+</body>
+</html>

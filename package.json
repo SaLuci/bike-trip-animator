@@ -1,0 +1,21 @@
+{
+  "name": "bike-trip-animator",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview --host"
+  },
+  "devDependencies": {
+    "@types/geojson": "^7946.0.16",
+    "@types/topojson-client": "^3.1.5",
+    "typescript": "^7.0.2",
+    "vite": "^8.1.5"
+  },
+  "dependencies": {
+    "topojson-client": "^3.1.0",
+    "world-atlas": "^2.0.2"
+  }
+}

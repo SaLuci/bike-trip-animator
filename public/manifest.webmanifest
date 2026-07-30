@@ -1,0 +1,13 @@
+{
+  "name": "Bike Trip Animator",
+  "short_name": "Bike Trip",
+  "description": "Animate your daily GPX bike rides into a cartoon map GIF.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#7ec8e3",
+  "theme_color": "#7ec8e3",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
