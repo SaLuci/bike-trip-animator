@@ -22,7 +22,6 @@ import { ensureHydrologyAssetsLoaded, drawLakeLabelOverlays } from './hydrology'
 import {
   drawPolyline,
   drawBikeMarker,
-  drawLabelPill,
   drawStatsBar,
   drawDayTitle,
   drawExplosion,  drawCenteredKmCounter,  getRiddenTextAnchor
@@ -254,32 +253,61 @@ export async function generateVideo(data: TripData, opts: GenerateOptions): Prom
     }
 
     drawMountainOverlays(ctx, project, camT, CANVAS_WIDTH, CANVAS_HEIGHT);
-    // Suppress nearby-city dots once the route is complete (avoids a stray dot at the endpoint)
-    const cityCamT = routeProgress >= 1 ? Math.max(camT, 0.72) : camT;
-    drawCityOverlays(ctx, project, cityOverlays, cityCamT, CANVAS_WIDTH, CANVAS_HEIGHT);
+    drawCityOverlays(ctx, project, cityOverlays, camT, CANVAS_WIDTH, CANVAS_HEIGHT);
     drawLakeLabelOverlays(ctx, project, lakeLabelBounds, camT);
 
-    if (currentPoint) drawBikeMarker(ctx, currentPoint, project, facingLeft, data.riderEmoji);
+    // Start / end city names — dot on path + bold halo text to the side, fades on zoom-out
+    // Drawn before the bike marker so the rider always appears on top
+    const drawCityNameText = (label: string, x: number, y: number) => {
+      const alpha = Math.max(0, 1 - camT * 8);
+      if (alpha <= 0) return;
+      const fontPx = 24;
+      const dotR = 7;
+      const side = x < CANVAS_WIDTH / 2 ? 1 : -1;
+      const rawTx = x + side * (dotR + 9);
+      const lx = Math.max(fontPx + 4, Math.min(CANVAS_WIDTH - fontPx - 4, rawTx));
+      const align: CanvasTextAlign = side > 0 ? 'left' : 'right';
 
-    // Start / end city names — pill labels, bigger than map city overlays, no icons
-    if (camT <= 0.02 && startPoint && data.startCity.trim()) {
+      ctx.save();
+      ctx.globalAlpha = alpha;
+
+      ctx.shadowColor = 'rgba(0,0,0,0.35)';
+      ctx.shadowBlur = 6;
+      ctx.shadowOffsetY = 1;
+      ctx.fillStyle = 'rgba(18,26,50,0.92)';
+      ctx.beginPath();
+      ctx.arc(x, y, dotR, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowColor = 'transparent';
+      ctx.shadowBlur = 0;
+      ctx.shadowOffsetY = 0;
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = 'rgba(255,255,255,0.95)';
+      ctx.stroke();
+
+      ctx.font = `800 ${fontPx}px system-ui,-apple-system,"Segoe UI",sans-serif`;
+      ctx.textAlign = align;
+      ctx.textBaseline = 'middle';
+      ctx.lineWidth = Math.max(3, fontPx * 0.28);
+      ctx.lineJoin = 'round';
+      ctx.strokeStyle = 'rgba(255,255,255,0.95)';
+      ctx.strokeText(label, lx, y);
+      ctx.fillStyle = 'rgba(18,26,50,0.92)';
+      ctx.fillText(label, lx, y);
+
+      ctx.restore();
+    };
+    if (startPoint && data.startCity.trim()) {
       const [sx, sy] = project(startPoint.lon, startPoint.lat);
-      const fontPx = 22;
-      ctx.font = `700 ${fontPx}px system-ui,-apple-system,"Segoe UI",sans-serif`;
-      const tw = ctx.measureText(data.startCity.trim()).width + fontPx * 1.2;
-      const lx = Math.max(tw / 2 + 12, Math.min(CANVAS_WIDTH - tw / 2 - 12, sx));
-      const ly = Math.max(24, sy - 44);
-      drawLabelPill(ctx, data.startCity.trim(), lx, ly, fontPx);
+      drawCityNameText(data.startCity.trim(), sx, sy);
     }
-    if (routeProgress >= 1 && camT <= 0.02 && endPoint && data.endCity.trim()) {
+    if (routeProgress >= 1 && endPoint && data.endCity.trim()) {
       const [ex, ey] = project(endPoint.lon, endPoint.lat);
-      const fontPx = 22;
-      ctx.font = `700 ${fontPx}px system-ui,-apple-system,"Segoe UI",sans-serif`;
-      const tw = ctx.measureText(data.endCity.trim()).width + fontPx * 1.2;
-      const lx = Math.max(tw / 2 + 12, Math.min(CANVAS_WIDTH - tw / 2 - 12, ex));
-      const ly = Math.max(24, ey - 44);
-      drawLabelPill(ctx, data.endCity.trim(), lx, ly, fontPx);
+      drawCityNameText(data.endCity.trim(), ex, ey);
     }
+
+    // Bike marker drawn last so it's always on top of city names
+    if (currentPoint) drawBikeMarker(ctx, currentPoint, project, facingLeft, data.riderEmoji);
 
     drawDayTitle(ctx, data.dayTitle, CANVAS_WIDTH);
 
