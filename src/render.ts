@@ -210,8 +210,8 @@ function formatKm(km: number): string {
   return Math.round(km).toLocaleString();
 }
 
-const STATS_BAR_HEIGHT = 90;
-const STATS_BAR_MARGIN = 24;
+const STATS_BAR_HEIGHT = 118;
+const STATS_BAR_MARGIN = 20;
 
 /** The on-canvas anchor point of the "km ridden" text, shared with the explosion effect. */
 export function getRiddenTextAnchor(
@@ -219,10 +219,12 @@ export function getRiddenTextAnchor(
   canvasHeight: number,
   hasRemaining: boolean
 ): { x: number; y: number } {
-  const y = canvasHeight - STATS_BAR_MARGIN - STATS_BAR_HEIGHT;
+  const barH = STATS_BAR_HEIGHT;
+  const margin = STATS_BAR_MARGIN;
+  const y = canvasHeight - margin - barH;
   return {
     x: canvasWidth / 2,
-    y: hasRemaining ? y + STATS_BAR_HEIGHT * 0.34 : y + STATS_BAR_HEIGHT / 2
+    y: hasRemaining ? y + barH * 0.37 : y + barH * 0.44
   };
 }
 
@@ -241,68 +243,238 @@ export function drawStatsBar(
   const margin = STATS_BAR_MARGIN;
   const y = canvasHeight - margin - barH;
   const w = canvasWidth - margin * 2;
-  const riddenY = remainingKm !== null ? y + barH * 0.34 : y + barH / 2;
+  const cx = canvasWidth / 2;
+  const hasRemaining = remainingKm !== null;
 
   ctx.save();
 
-  // Drop shadow beneath the bar
+  // Background card with shadow
   ctx.shadowColor = 'rgba(0,0,0,0.38)';
   ctx.shadowBlur = 18;
   ctx.shadowOffsetY = 4;
-  roundedRectPath(ctx, margin, y, w, barH, 26);
+  roundedRectPath(ctx, margin, y, w, barH, 28);
   ctx.fillStyle = 'rgba(8,16,28,0.82)';
   ctx.fill();
   ctx.shadowColor = 'transparent';
   ctx.shadowBlur = 0;
   ctx.shadowOffsetY = 0;
 
-  // Subtle frosted-glass top-edge highlight
+  // Frosted-glass top edge
   roundedRectPath(ctx, margin + 1, y + 1, w - 2, 2, 1);
   ctx.fillStyle = 'rgba(255,255,255,0.16)';
   ctx.fill();
 
-  ctx.fillStyle = '#ffffff';
-  ctx.textBaseline = 'middle';
-  ctx.textAlign = 'center';
+  // Vertical centres for the counter and label rows
+  const counterCY = hasRemaining ? y + barH * 0.37 : y + barH * 0.44;
+  const labelCY   = hasRemaining ? y + barH * 0.64 : y + barH * 0.74;
 
   const totalRidden = previousKm + todayKm;
   const hasPrevious = previousKm > 0.05;
-  const combinedText = `${riderEmoji} ${formatKm(totalRidden)} km ridden`;
-  const combinedFontPx = remainingKm !== null ? 28 : 32;
+  const crossfade   = Math.max(0, Math.min(1, splitToCombinedProgress));
+
+  // --- draw a "NNN km" pair centred at (cx, cy) ---
+  const drawCounter = (km: number, alpha: number, cy: number) => {
+    if (alpha <= 0) return;
+    const numFontPx = 52;
+    const unitFontPx = 19;
+    const numStr = formatKm(km);
+    ctx.font = `800 ${numFontPx}px system-ui, -apple-system, "Segoe UI", sans-serif`;
+    const numW = ctx.measureText(numStr).width;
+    ctx.font = `600 ${unitFontPx}px system-ui, -apple-system, "Segoe UI", sans-serif`;
+    const unitW = ctx.measureText(' km').width;
+    const pairW = numW + unitW;
+    const sx = cx - pairW / 2;
+
+    ctx.globalAlpha = alpha;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+
+    ctx.font = `800 ${numFontPx}px system-ui, -apple-system, "Segoe UI", sans-serif`;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText(numStr, sx, cy);
+
+    ctx.font = `600 ${unitFontPx}px system-ui, -apple-system, "Segoe UI", sans-serif`;
+    ctx.fillStyle = 'rgba(255,255,255,0.60)';
+    ctx.fillText(' km', sx + numW, cy + (numFontPx - unitFontPx) * 0.30);
+    ctx.globalAlpha = 1;
+  };
+
+  // --- draw small label centred at (cx, cy) ---
+  const drawLabel = (text: string, alpha: number, cy: number) => {
+    if (alpha <= 0) return;
+    ctx.globalAlpha = alpha;
+    ctx.font = `500 15px system-ui, -apple-system, "Segoe UI", sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = 'rgba(255,255,255,0.48)';
+    ctx.fillText(text, cx, cy);
+    ctx.globalAlpha = 1;
+  };
 
   if (hasPrevious) {
-    // Before the "explosion", show the two numbers separately (previous total + today's
-    // count-up); the explosion then crossfades into the single combined total.
-    const crossfade = Math.max(0, Math.min(1, splitToCombinedProgress));
-    const splitText = `${riderEmoji} ${formatKm(previousKm)} + ${formatKm(todayKm)} km ridden`;
-    if (crossfade < 1) {
-      ctx.font = `700 23px system-ui, -apple-system, "Segoe UI", sans-serif`;
-      ctx.globalAlpha = 1 - crossfade;
-      ctx.fillText(splitText, canvasWidth / 2, riddenY);
-    }
-    if (crossfade > 0) {
-      ctx.font = `700 ${combinedFontPx}px system-ui, -apple-system, "Segoe UI", sans-serif`;
-      ctx.globalAlpha = crossfade;
-      ctx.fillText(combinedText, canvasWidth / 2, riddenY);
-    }
-    ctx.globalAlpha = 1;
+    // Crossfade: today's km → combined total
+    drawCounter(todayKm,    1 - crossfade, counterCY);
+    drawLabel(`${riderEmoji} today`,  1 - crossfade, labelCY);
+    drawCounter(totalRidden, crossfade,     counterCY);
+    drawLabel(`${riderEmoji} total`,   crossfade,     labelCY);
   } else {
-    ctx.font = `700 ${combinedFontPx}px system-ui, -apple-system, "Segoe UI", sans-serif`;
-    ctx.fillText(combinedText, canvasWidth / 2, riddenY);
+    drawCounter(todayKm, 1, counterCY);
+    drawLabel(`${riderEmoji} total`, 1, labelCY);
   }
 
+  // Remaining km row
   if (remainingKm !== null) {
-    // Thin separator between the two lines
-    const sepY = y + barH * 0.56;
-    ctx.fillStyle = 'rgba(255,255,255,0.12)';
+    const sepY = y + barH * 0.76;
+    ctx.fillStyle = 'rgba(255,255,255,0.10)';
     ctx.fillRect(margin + 24, sepY, w - 48, 1);
 
-    ctx.font = `400 20px system-ui, -apple-system, "Segoe UI", sans-serif`;
-    ctx.fillStyle = 'rgba(255,255,255,0.76)';
+    ctx.font = `500 18px system-ui, -apple-system, "Segoe UI", sans-serif`;
+    ctx.fillStyle = 'rgba(255,255,255,0.65)';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
     ctx.globalAlpha = Math.max(0, Math.min(1, remainingAlpha));
-    ctx.fillText(`🏁 ${formatKm(remainingKm)} km to go`, canvasWidth / 2, y + barH * 0.76);
+    ctx.fillText(`🏁 ${formatKm(remainingKm)} km to go`, cx, y + barH * 0.89);
     ctx.globalAlpha = 1;
   }
+
+  ctx.restore();
+}
+
+/**
+ * Animated km counter that flies from the stats bar up to the centre of the screen,
+ * then smashes the previous total in with a golden flash and shows the combined sum.
+ *
+ * flyUpT   0→1  number travels from stats-bar to screen-centre (grows 1× → 2.5×)
+ * xfade    0→1  smash animation — only runs when flyUpT = 1 and hasPrevious
+ */
+export function drawCenteredKmCounter(
+  ctx: CanvasRenderingContext2D,
+  flyUpT: number,
+  explodeProgress: number,
+  previousKm: number,
+  todayKm: number,
+  canvasWidth: number,
+  canvasHeight: number,
+  riderEmoji = '🚴',
+  outerAlpha = 1
+): void {
+  if (flyUpT <= 0 || outerAlpha <= 0) return;
+
+  const easeOut3 = (t: number) => 1 - (1 - clamp(t, 0, 1)) ** 3;
+  const flyEased = easeOut3(flyUpT);
+  const xfade    = clamp(explodeProgress, 0, 1);
+  const hasPrevious = previousKm > 0.05;
+
+  // Vertical position: stats-bar midpoint → 40% down the canvas
+  const barCY    = canvasHeight - STATS_BAR_MARGIN - STATS_BAR_HEIGHT * 0.44;
+  const targetCY = canvasHeight * 0.40;
+  const cy = barCY + (targetCY - barCY) * flyEased;
+
+  // Scale: 1× at bar → 2.5× at centre
+  const scale  = 1 + 1.5 * flyEased;
+  const nPx    = 52 * scale;   // big number
+  const uPx    = 19 * scale;   // ‘km’ unit
+  const lPx    = 15 * scale;   // label
+  const cx     = canvasWidth / 2;
+
+  ctx.save();
+
+  // --- helper: draw “NNN km” pair centred at (cx, y) ---
+  const numPair = (km: number, alpha: number, y: number) => {
+    if (alpha * outerAlpha <= 0) return;
+    const str = formatKm(km);
+    ctx.font = `800 ${nPx}px system-ui,-apple-system,"Segoe UI",sans-serif`;
+    const nw = ctx.measureText(str).width;
+    ctx.font = `600 ${uPx}px system-ui,-apple-system,"Segoe UI",sans-serif`;
+    const uw = ctx.measureText(' km').width;
+    const sx = cx - (nw + uw) / 2;
+    ctx.globalAlpha = alpha * outerAlpha;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.shadowColor = 'rgba(0,0,0,0.50)';
+    ctx.shadowBlur  = 18 * scale;
+    ctx.font = `800 ${nPx}px system-ui,-apple-system,"Segoe UI",sans-serif`;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText(str, sx, y);
+    ctx.shadowBlur = 0;
+    ctx.font = `600 ${uPx}px system-ui,-apple-system,"Segoe UI",sans-serif`;
+    ctx.fillStyle = 'rgba(255,255,255,0.58)';
+    ctx.fillText(' km', sx + nw, y + (nPx - uPx) * 0.30);
+    ctx.globalAlpha = 1;
+  };
+
+  // --- helper: small label centred below the number ---
+  const lbl = (text: string, alpha: number, y: number) => {
+    if (alpha * outerAlpha <= 0) return;
+    ctx.globalAlpha = alpha * outerAlpha;
+    ctx.font = `500 ${lPx}px system-ui,-apple-system,"Segoe UI",sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = 'rgba(255,255,255,0.50)';
+    ctx.fillText(text, cx, y);
+    ctx.globalAlpha = 1;
+  };
+
+  if (!hasPrevious) {
+    // Single day: number counts up then slides to stats bar. No labels, no flash.
+    numPair(todayKm, flyUpT, cy);
+
+  } else if (xfade < 0.25) {
+    // SMASH: two numbers converge very fast. Numbers only — no labels.
+    const convergeT = easeOut3(xfade / 0.25);
+    const gap = nPx * 0.52;
+    const prevY  = cy - gap * (1 - convergeT);
+    const todayY = cy + gap * (1 - convergeT);
+
+    // Previous: smaller, gold
+    const pFontPx = nPx * 0.52;
+    const pUnitPx = uPx * 0.52;
+    const pStr = formatKm(previousKm);
+    ctx.font = `700 ${pFontPx}px system-ui,-apple-system,"Segoe UI",sans-serif`;
+    const pnw = ctx.measureText(pStr).width;
+    ctx.font = `500 ${pUnitPx}px system-ui,-apple-system,"Segoe UI",sans-serif`;
+    const puw = ctx.measureText(' km').width;
+    const psx = cx - (pnw + puw) / 2;
+    ctx.globalAlpha = flyUpT * outerAlpha;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.shadowColor = 'rgba(0,0,0,0.45)';
+    ctx.shadowBlur = 12;
+    ctx.font = `700 ${pFontPx}px system-ui,-apple-system,"Segoe UI",sans-serif`;
+    ctx.fillStyle = '#ffd166';
+    ctx.fillText(pStr, psx, prevY);
+    ctx.shadowBlur = 0;
+    ctx.font = `500 ${pUnitPx}px system-ui,-apple-system,"Segoe UI",sans-serif`;
+    ctx.fillStyle = 'rgba(255,209,102,0.70)';
+    ctx.fillText(' km', psx + pnw, prevY + (pFontPx - pUnitPx) * 0.3);
+    ctx.globalAlpha = 1;
+
+    // "+" centred in the visual gap between the two numbers, same colour as main counter
+    const plusY = cy - nPx * 0.12; // corrects for previous being smaller than today
+    ctx.globalAlpha = flyUpT * outerAlpha;
+    ctx.font = `600 ${nPx * 0.38}px system-ui,-apple-system,"Segoe UI",sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText('+', cx, plusY);
+    ctx.globalAlpha = 1;
+
+    // Today: full size
+    numPair(todayKm, flyUpT, todayY);
+
+  } else if (xfade < 0.38) {
+    // Flash!
+    const flashT = 1 - Math.abs(xfade - 0.315) / 0.065;
+    ctx.globalAlpha = clamp(flashT, 0, 1) * 0.80 * outerAlpha;
+    ctx.fillStyle = '#ffd166';
+    ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+    ctx.globalAlpha = 1;
+
+  } else {
+    // Combined total — no label — slides to stats bar during zoom-out
+    numPair(todayKm + previousKm, flyUpT, cy);
+  }
+
   ctx.restore();
 }
 

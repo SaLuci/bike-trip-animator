@@ -25,8 +25,7 @@ import {
   drawCityMarker,
   drawStatsBar,
   drawDayTitle,
-  drawExplosion,
-  getRiddenTextAnchor
+  drawExplosion,  drawCenteredKmCounter,  getRiddenTextAnchor
 } from './render';
 import { CanvasVideoRecorder, type RecordedVideo } from './videoExport';
 import { ensureEuropeMapAssetsLoaded } from './europeMap';
@@ -167,11 +166,13 @@ export async function generateVideo(data: TripData, opts: GenerateOptions): Prom
 
   const trackHoldFrames = Math.round((FPS * TRACK_HOLD_SECONDS) / speed);
   const animateFrames = Math.max(1, Math.round((FPS * ANIMATE_SECONDS) / speed));
-  const splitHoldFrames = Math.round((FPS * SPLIT_HOLD_SECONDS) / speed);
-  const explodeFrames = Math.max(1, Math.round((FPS * EXPLODE_SECONDS) / speed));
-  const preZoomHoldFrames = Math.round((FPS * PRE_ZOOM_HOLD_SECONDS) / speed);
-  const zoomOutFrames = Math.max(1, Math.round((FPS * ZOOM_OUT_SECONDS) / speed));
-  const endHoldFrames = Math.round((FPS * END_HOLD_SECONDS) / speed);
+  const splitHoldFrames  = Math.round((FPS * SPLIT_HOLD_SECONDS) / speed);
+  // Smash + pre-zoom hold only make sense when there are previous days to add together.
+  const hasPreviousDays = previousDaysKm > 0.05;
+  const explodeFrames     = hasPreviousDays ? Math.max(1, Math.round((FPS * EXPLODE_SECONDS) / speed)) : 0;
+  const preZoomHoldFrames = hasPreviousDays ? Math.round((FPS * PRE_ZOOM_HOLD_SECONDS) / speed) : 0;
+  const zoomOutFrames     = Math.max(1, Math.round((FPS * ZOOM_OUT_SECONDS) / speed));
+  const endHoldFrames     = Math.round((FPS * END_HOLD_SECONDS) / speed);
   const totalFrames = trackHoldFrames + animateFrames + splitHoldFrames + explodeFrames + preZoomHoldFrames + zoomOutFrames + endHoldFrames;
 
   const recorder = new CanvasVideoRecorder(canvas, FPS);
@@ -209,38 +210,32 @@ export async function generateVideo(data: TripData, opts: GenerateOptions): Prom
     const frameStart = performance.now();
     let routeProgress: number;
     let explodeProgress: number;
-    let camT: number; // 0 = tracking (zoomed to today), 1 = full tour revealed
+    let camT: number;
 
-    if (frameIdx < trackHoldFrames) {
-      routeProgress = 0;
-      explodeProgress = 0;
-      camT = 0;
-    } else if (frameIdx < trackHoldFrames + animateFrames) {
-      routeProgress = (frameIdx - trackHoldFrames) / Math.max(1, animateFrames - 1);
-      explodeProgress = 0;
-      camT = 0;
-    } else if (frameIdx < trackHoldFrames + animateFrames + splitHoldFrames) {
-      // Hold on the completed route so the viewer can read today's km
-      routeProgress = 1;
-      explodeProgress = 0;
-      camT = 0;
-    } else if (frameIdx < trackHoldFrames + animateFrames + splitHoldFrames + explodeFrames) {
-      routeProgress = 1;
-      explodeProgress = (frameIdx - trackHoldFrames - animateFrames - splitHoldFrames) / Math.max(1, explodeFrames - 1);
-      camT = 0;
-    } else if (frameIdx < trackHoldFrames + animateFrames + splitHoldFrames + explodeFrames + preZoomHoldFrames) {
-      // Hold on the combined total before zooming out
-      routeProgress = 1;
-      explodeProgress = 1;
-      camT = 0;
-    } else if (frameIdx < trackHoldFrames + animateFrames + splitHoldFrames + explodeFrames + preZoomHoldFrames + zoomOutFrames) {
-      routeProgress = 1;
-      explodeProgress = 1;
-      camT = (frameIdx - trackHoldFrames - animateFrames - splitHoldFrames - explodeFrames - preZoomHoldFrames) / Math.max(1, zoomOutFrames - 1);
+    const A = trackHoldFrames;
+    const B = A + animateFrames;
+    const C = B + splitHoldFrames;
+    const D = C + explodeFrames;
+    const E = D + preZoomHoldFrames;
+    const F = E + zoomOutFrames;
+
+    if (frameIdx < A) {
+      routeProgress = 0; explodeProgress = 0; camT = 0;
+    } else if (frameIdx < B) {
+      routeProgress = (frameIdx - A) / Math.max(1, animateFrames - 1);
+      explodeProgress = 0; camT = 0;
+    } else if (frameIdx < C) {
+      routeProgress = 1; explodeProgress = 0; camT = 0;
+    } else if (frameIdx < D) {
+      routeProgress = 1; camT = 0;
+      explodeProgress = (frameIdx - C) / Math.max(1, explodeFrames - 1);
+    } else if (frameIdx < E) {
+      routeProgress = 1; explodeProgress = 1; camT = 0;
+    } else if (frameIdx < F) {
+      routeProgress = 1; explodeProgress = 1;
+      camT = easeInOutCubic((frameIdx - E) / Math.max(1, zoomOutFrames - 1));
     } else {
-      routeProgress = 1;
-      explodeProgress = 1;
-      camT = 1;
+      routeProgress = 1; explodeProgress = 1; camT = 1;
     }
     routeProgress = Math.max(0, Math.min(1, routeProgress));
 
@@ -278,10 +273,10 @@ export async function generateVideo(data: TripData, opts: GenerateOptions): Prom
     drawLakeLabelOverlays(ctx, project, lakeLabelBounds, camT);
 
     if (camT <= 0.02 && startPoint) {
-      drawCityMarker(ctx, data.startCity, startPoint, project, '🚩', CANVAS_WIDTH);
+      // start pin removed per user preference
     }
     if (routeProgress >= 1 && camT <= 0.02 && endPoint) {
-      drawCityMarker(ctx, data.endCity, endPoint, project, '🏁', CANVAS_WIDTH);
+      // end pin removed per user preference
     }
 
     // Drawn after the start/end pins so the rider is always visible on top, even when it
@@ -293,8 +288,25 @@ export async function generateVideo(data: TripData, opts: GenerateOptions): Prom
     const todayKm = currentDayKm * routeProgress;
     const riddenKm = previousDaysKm + todayKm;
     const remainingKm = totalTripKm !== null ? totalTripKm - riddenKm : null;
-    drawStatsBar(ctx, CANVAS_WIDTH, CANVAS_HEIGHT, previousDaysKm, todayKm, remainingKm, camT, explodeProgress, data.riderEmoji);
-    drawExplosion(ctx, riddenAnchor.x, riddenAnchor.y, explodeProgress);
+
+    // Centred km counter: always at screen centre; during zoom-out slides back
+    // down toward the stats bar (reverse fly-up) so it lands there naturally.
+    const flyUpT = camT > 0 ? Math.max(0, 1 - camT * 2) : 1;
+    drawCenteredKmCounter(ctx, flyUpT, explodeProgress, previousDaysKm, todayKm, CANVAS_WIDTH, CANVAS_HEIGHT, data.riderEmoji, 1);
+
+    // Stats bar: fades in as the camera starts zooming out.
+    const statsBarAlpha = Math.min(1, Math.max(0, (camT - 0.1) / 0.2));
+    if (statsBarAlpha > 0.01) {
+      ctx.save();
+      ctx.globalAlpha = statsBarAlpha;
+      drawStatsBar(ctx, CANVAS_WIDTH, CANVAS_HEIGHT, previousDaysKm, todayKm, remainingKm, camT, explodeProgress, data.riderEmoji);
+      ctx.restore();
+    }
+
+    // Explosion particles follow the centred counter.
+    if (previousDaysKm > 0.05) {
+      drawExplosion(ctx, CANVAS_WIDTH / 2, CANVAS_HEIGHT * 0.40, explodeProgress);
+    }
 
     onProgress((frameIdx + 1) / totalFrames);
 
