@@ -1,30 +1,25 @@
-import lakeLabelsData from './data/euHydroLakeLabels.json';
+import waterData from './data/euHydroWater.json';
 import type { LonLatBounds, Projection } from './types';
-import { EUROPE_RASTER_BOUNDS } from './europeMap';
 
-interface LakeLabelInfo {
-  name: string;
-  lon: number;
-  lat: number;
+interface LakeFeature {
+  rings: [number, number][][];
+  name: string | null;
   area: number;
+  cx: number;
+  cy: number;
 }
 
-const LAKE_LABELS = lakeLabelsData as LakeLabelInfo[];
-let euHydroLakesImage: HTMLImageElement | null = null;
-
-async function loadEuHydroLakesImage() {
-  const img = new Image();
-  img.decoding = 'async';
-  img.src = new URL('./data/euHydroLakes.png', import.meta.url).href;
-  await img.decode();
-  return img;
+interface RiverPath {
+  order: number;
+  path: [number, number][];
 }
 
-const euHydroLakesImagePromise = loadEuHydroLakesImage();
+const LAKES = waterData.lakes as unknown as LakeFeature[];
+const RIVERS = waterData.rivers as unknown as RiverPath[];
 
+/** No longer loads any external assets — kept for backward compat */
 export async function ensureHydrologyAssetsLoaded() {
-  if (!euHydroLakesImage) euHydroLakesImage = await euHydroLakesImagePromise;
-  return euHydroLakesImage;
+  return true;
 }
 
 function clamp(value: number, min: number, max: number) {
@@ -41,10 +36,21 @@ export function drawRivers(
   bounds: LonLatBounds,
   scale = 1
 ) {
-  void ctx;
-  void project;
-  void bounds;
-  void scale;
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = '#5aa9c9';
+  for (const river of RIVERS) {
+    const visible = river.path.some(([lon, lat]) => inBounds(lon, lat, bounds));
+    if (!visible) continue;
+    ctx.lineWidth = (river.order === 9 ? 2.2 : 1.2) * scale;
+    ctx.beginPath();
+    const pts = river.path.map(([lon, lat]) => project(lon, lat));
+    ctx.moveTo(pts[0][0], pts[0][1]);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+    ctx.stroke();
+  }
+  ctx.restore();
 }
 
 export function drawLakes(
@@ -53,37 +59,23 @@ export function drawLakes(
   bounds: LonLatBounds,
   scale = 1
 ) {
-  if (!euHydroLakesImage) return;
   ctx.save();
-  const rasterBandHeight = 1;
-  const lonSpan = EUROPE_RASTER_BOUNDS.maxLon - EUROPE_RASTER_BOUNDS.minLon;
-  const latSpan = EUROPE_RASTER_BOUNDS.maxLat - EUROPE_RASTER_BOUNDS.minLat;
-  const [dstLeft] = project(EUROPE_RASTER_BOUNDS.minLon, EUROPE_RASTER_BOUNDS.maxLat);
-  const [dstRight] = project(EUROPE_RASTER_BOUNDS.maxLon, EUROPE_RASTER_BOUNDS.maxLat);
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = 'high';
-
-  for (let sy = 0; sy < euHydroLakesImage.height - rasterBandHeight; sy += rasterBandHeight) {
-    const latNorth = EUROPE_RASTER_BOUNDS.maxLat - (sy / euHydroLakesImage.height) * latSpan;
-    const latSouth = EUROPE_RASTER_BOUNDS.maxLat - ((sy + rasterBandHeight) / euHydroLakesImage.height) * latSpan;
-    const [, dstTop] = project(EUROPE_RASTER_BOUNDS.minLon, latNorth);
-    const [, dstBottom] = project(EUROPE_RASTER_BOUNDS.minLon, latSouth);
-    const destHeight = dstBottom - dstTop;
-    if (Math.abs(destHeight) < 0.5) continue;
-
-    ctx.drawImage(
-      euHydroLakesImage,
-      0,
-      sy,
-      euHydroLakesImage.width,
-      rasterBandHeight,
-      dstLeft,
-      dstTop,
-      dstRight - dstLeft,
-      destHeight
-    );
+  ctx.fillStyle = '#8fd0e0';
+  ctx.strokeStyle = '#5b8cae';
+  ctx.lineWidth = 0.9 * scale;
+  for (const lake of LAKES) {
+    const visible = lake.rings[0].some(([lon, lat]) => inBounds(lon, lat, bounds));
+    if (!visible) continue;
+    ctx.beginPath();
+    for (const ring of lake.rings) {
+      const pts = ring.map(([lon, lat]) => project(lon, lat));
+      ctx.moveTo(pts[0][0], pts[0][1]);
+      for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+      ctx.closePath();
+    }
+    ctx.fill('evenodd');
+    ctx.stroke();
   }
-
   ctx.restore();
 }
 
@@ -100,9 +92,11 @@ export function drawLakeLabelOverlays(
   ctx.save();
   ctx.globalAlpha = alpha;
   ctx.textAlign = 'center';
-  for (const lake of LAKE_LABELS) {
-    if (!inBounds(lake.lon, lake.lat, bounds)) continue;
-    const [lx, ly] = project(lake.lon, lake.lat);
+  ctx.textBaseline = 'middle';
+  for (const lake of LAKES) {
+    if (!lake.name) continue;
+    if (!inBounds(lake.cx, lake.cy, bounds)) continue;
+    const [lx, ly] = project(lake.cx, lake.cy);
     const fontPx = clamp(7.6 + Math.log10(Math.max(1, lake.area)) - 5.5, 8, 13) * scale;
     ctx.font = `italic 600 ${fontPx}px system-ui, sans-serif`;
     ctx.lineWidth = Math.max(2 * scale, fontPx * 0.16);
