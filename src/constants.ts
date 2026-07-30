@@ -30,7 +30,7 @@ export const MAX_SPEED = 2.5;
 export const DEFAULT_SPEED = 1;
 
 // Camera framing.
-export const TRACKING_PADDING = 0.12;
+export const TRACKING_PADDING = 0.18;
 export const FULL_PADDING = 0.14;
 export const MIN_TRACKING_SPAN_DEG = 0.25;
 export const HEADING_LOOKBACK_KM = 0.4;

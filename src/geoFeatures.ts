@@ -336,13 +336,6 @@ export function drawMountainOverlays(
     if (!projected) continue;
 
     const elevationT = clamp((mountain.elevation - 500) / 3500, 0, 1);
-    const glyphAlpha = clamp((0.82 - camT * 0.62) * (0.45 + elevationT * 0.55), 0.16, 1);
-    const glyphScale = scale * (0.28 + elevationT * 0.28);
-
-    ctx.save();
-    ctx.globalAlpha = glyphAlpha;
-    drawMountainGlyph(ctx, projected[0], projected[1], glyphScale);
-    ctx.restore();
 
     if (labelAlpha > 0.02 && mountain.elevation >= 900) {
       const mFontPx = (8.5 + elevationT * 1.8) * scale;
