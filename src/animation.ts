@@ -177,8 +177,12 @@ export async function generateVideo(data: TripData, opts: GenerateOptions): Prom
 
   // Persists across frames so a near-vertical stretch of road doesn't make the rider flicker.
   let facingLeft = true;
+  // Lake labels only appear while camT≈0 (tracking camera). Pre-scope their visibility
+  // to that camera's bounds so we don't iterate over all of Europe every frame.
+  const lakeLabelBounds = trackingVisibleBounds;
 
   for (let frameIdx = 0; frameIdx < totalFrames; frameIdx++) {
+    const frameStart = performance.now();
     let routeProgress: number;
     let explodeProgress: number;
     let camT: number; // 0 = tracking (zoomed to today), 1 = full tour revealed
@@ -239,7 +243,7 @@ export async function generateVideo(data: TripData, opts: GenerateOptions): Prom
 
     drawMountainOverlays(ctx, project, camT, CANVAS_WIDTH, CANVAS_HEIGHT);
     drawCityOverlays(ctx, project, cityOverlays, camT, CANVAS_WIDTH, CANVAS_HEIGHT);
-    drawLakeLabelOverlays(ctx, project, staticBounds, camT);
+    drawLakeLabelOverlays(ctx, project, lakeLabelBounds, camT);
 
     if (camT <= 0.02 && startPoint) {
       drawCityMarker(ctx, data.startCity, startPoint, project, '🚩', CANVAS_WIDTH);
@@ -262,9 +266,11 @@ export async function generateVideo(data: TripData, opts: GenerateOptions): Prom
 
     onProgress((frameIdx + 1) / totalFrames);
 
-    // Real-time pacing: the video recorder samples the canvas live, so each frame needs to
-    // actually stay on screen for roughly one frame interval.
-    await sleep(FRAME_DELAY_MS);
+    // Real-time pacing: subtract the time already spent rendering so the total frame
+    // duration stays at FRAME_DELAY_MS — avoids duplicate captures by the MediaRecorder
+    // when rendering is fast, and avoids spiralling delays when it's slow.
+    const renderMs = performance.now() - frameStart;
+    await sleep(Math.max(0, FRAME_DELAY_MS - renderMs));
   }
 
   onStatus('Finishing up…');
