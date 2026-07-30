@@ -19,6 +19,7 @@ export const FPS = 12;
 export const FRAME_DELAY_MS = Math.round(1000 / FPS);
 export const TRACK_HOLD_SECONDS = 0.6;
 export const ANIMATE_SECONDS = 3.2;
+export const SPLIT_HOLD_SECONDS = 1.8;
 export const EXPLODE_SECONDS = 0.7;
 export const ZOOM_OUT_SECONDS = 2.2;
 export const END_HOLD_SECONDS = 1.8;
