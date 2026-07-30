@@ -12,12 +12,12 @@ export interface ProjectionParams {
   y2: number;
 }
 
-/** Fallback view covering roughly Germany down to central Italy, used when no GPX data is loaded yet. */
+/** Fallback view showing all of Europe, used when no GPX data is loaded yet. */
 export const DEFAULT_EUROPE_BOUNDS: LonLatBounds = {
-  minLon: 5,
-  maxLon: 16,
-  minLat: 43.5,
-  maxLat: 54.5
+  minLon: -22,
+  maxLon: 40,
+  minLat: 34,
+  maxLat: 70
 };
 
 export function haversineKm(a: TrackPoint, b: TrackPoint): number {
