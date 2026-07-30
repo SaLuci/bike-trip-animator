@@ -124,13 +124,16 @@ export async function generateVideo(data: TripData, opts: GenerateOptions): Prom
   const staticWidth = Math.round(CANVAS_WIDTH * STATIC_SUPERSAMPLE * exportScaleX);
   const staticHeight = Math.round(CANVAS_HEIGHT * STATIC_SUPERSAMPLE * exportScaleY);
   const staticParams = computeProjectionParams(staticBounds, staticWidth, staticHeight, FULL_PADDING);
-  const basemap = buildBasemapLayer(
+  const basemapCanvas = buildBasemapLayer(
     staticWidth,
     staticHeight,
     (lon, lat) => projectWithParams(staticParams, lon, lat),
     staticBounds,
     staticRenderScale
   );
+  // Convert to ImageBitmap so every per-frame drawImage pull comes from GPU memory
+  // rather than re-uploading the raw canvas pixels each time (big win on mobile).
+  const basemap = await createImageBitmap(basemapCanvas);
   const cityOverlays = selectRouteCityOverlayData(data.currentDayPoints);
 
   // Route lines are redrawn every frame (so they stay crisp as the camera zooms), but large
@@ -207,6 +210,7 @@ export async function generateVideo(data: TripData, opts: GenerateOptions): Prom
   const lakeLabelBounds = trackingVisibleBounds;
 
   for (let frameIdx = 0; frameIdx < totalFrames; frameIdx++) {
+    const frameStart = performance.now();
     let routeProgress: number;
     let explodeProgress: number;
     let camT: number;
@@ -309,15 +313,13 @@ export async function generateVideo(data: TripData, opts: GenerateOptions): Prom
 
     onProgress((frameIdx + 1) / totalFrames);
 
-    // Explicitly snapshot this frame into the stream — with captureStream(0) the recorder
-    // only captures when we say so, guaranteeing exactly one frame per render with no duplicates.
+    // Snapshot this frame explicitly — captureStream(0) never auto-samples.
     recorder.captureFrame();
 
-    // Sleep for one frame interval so the MediaRecorder sees the correct frame duration.
-    // We always sleep the full FRAME_DELAY_MS here (not minus render time) because the
-    // frame timestamp in the video is determined by how far apart our captureFrame() calls
-    // are, not by wall-clock render time.
-    await sleep(FRAME_DELAY_MS);
+    // Subtract render time from the sleep so the gap between captureFrame() calls
+    // stays at FRAME_DELAY_MS regardless of how long rendering took.
+    const renderMs = performance.now() - frameStart;
+    await sleep(Math.max(0, FRAME_DELAY_MS - renderMs));
   }
 
   onStatus('Finishing up…');
