@@ -133,7 +133,10 @@ export async function generateVideo(data: TripData, opts: GenerateOptions): Prom
     downsampleForRender(t, RENDER_MAX_POINTS_CONTEXT)
   );
 
-  const cumDist = cumulativeDistances(data.currentDayPoints);
+  // Downsample the current day for rendering so per-frame reveal and drawPolyline
+  // stay fast regardless of raw GPX file size.
+  const currentDayRender = downsampleForRender(data.currentDayPoints, RENDER_MAX_POINTS_CONTEXT);
+  const cumDist = cumulativeDistances(currentDayRender);
   const startPoint = data.currentDayPoints[0];
   const endPoint = data.currentDayPoints[data.currentDayPoints.length - 1];
 
@@ -219,7 +222,7 @@ export async function generateVideo(data: TripData, opts: GenerateOptions): Prom
     let currentPoint: TrackPoint | null = null;
     if (hasCurrentRoute) {
       const { current, revealed, headingDLon } = progressiveReveal(
-        data.currentDayPoints,
+        currentDayRender,
         cumDist,
         routeProgress,
         HEADING_LOOKBACK_KM
