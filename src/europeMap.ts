@@ -240,7 +240,7 @@ export function drawTerrainRelief(ctx: CanvasRenderingContext2D, project: Projec
   traceAllLand(ctx, project);
   ctx.clip('evenodd');
   ctx.globalCompositeOperation = 'multiply';
-  ctx.globalAlpha = 0.48;
+  ctx.globalAlpha = 0.65;
   ctx.imageSmoothingEnabled = true;
 
   for (let sy = 0; sy < reliefRaster.height - reliefBandHeight; sy += reliefBandHeight) {
@@ -265,7 +265,7 @@ export function drawTerrainRelief(ctx: CanvasRenderingContext2D, project: Projec
   }
 
   ctx.globalCompositeOperation = 'screen';
-  ctx.globalAlpha = 0.16;
+  ctx.globalAlpha = 0.22;
   ctx.filter = `blur(${Math.max(1.5, strokeScale * 0.6)}px)`;
   for (let sy = 0; sy < reliefRaster.height - reliefBandHeight; sy += reliefBandHeight * 2) {
     const latNorth = EUROPE_RASTER_BOUNDS.maxLat - (sy / reliefRaster.height) * latSpan;
