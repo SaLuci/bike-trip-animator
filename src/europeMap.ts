@@ -36,6 +36,12 @@ interface StyledMountainPointInfo extends MountainPointInfo {
   baseLightness: number;
 }
 
+interface ReliefRasterInfo {
+  image: HTMLImageElement;
+  width: number;
+  height: number;
+}
+
 const topology = countries10m as unknown as Topology<{ countries: GeometryObject }>;
 const MOUNTAIN_POINTS = mountainData as MountainPointInfo[];
 const EUROPE_RELIEF_BOUNDS = { minLon: -20, maxLon: 45, minLat: 30, maxLat: 72 } as const;
@@ -45,25 +51,15 @@ let cachedBorders: GeoMultiLineString | null = null;
 let cachedCountryReliefByName: Map<string, number> | null = null;
 let cachedStyledMountainPoints: StyledMountainPointInfo[] | null = null;
 
-async function loadReliefRaster() {
+async function loadReliefRaster(): Promise<ReliefRasterInfo> {
   const img = new Image();
   img.decoding = 'async';
   img.src = new URL('./data/europeRelief50m.png', import.meta.url).href;
   await img.decode();
-
-  const sampleWidth = 1200;
-  const sampleHeight = Math.round((img.height / img.width) * sampleWidth);
-  const canvas = document.createElement('canvas');
-  canvas.width = sampleWidth;
-  canvas.height = sampleHeight;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) throw new Error('Canvas 2D context is not available for relief raster.');
-  ctx.drawImage(img, 0, 0, sampleWidth, sampleHeight);
-  const imageData = ctx.getImageData(0, 0, sampleWidth, sampleHeight);
   return {
-    width: sampleWidth,
-    height: sampleHeight,
-    data: imageData.data
+    image: img,
+    width: img.naturalWidth || img.width,
+    height: img.naturalHeight || img.height
   };
 }
 
@@ -208,51 +204,6 @@ function getStyledMountainPoints(): StyledMountainPointInfo[] {
   return cachedStyledMountainPoints;
 }
 
-function traceProjectedRing(ctx: CanvasRenderingContext2D, ring: Array<[number, number]>) {
-  ring.forEach(([x, y], index) => {
-    if (index === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
-  });
-  ctx.closePath();
-}
-
-function projectedRingBounds(ring: Array<[number, number]>) {
-  let minX = Number.POSITIVE_INFINITY;
-  let minY = Number.POSITIVE_INFINITY;
-  let maxX = Number.NEGATIVE_INFINITY;
-  let maxY = Number.NEGATIVE_INFINITY;
-  for (const [x, y] of ring) {
-    if (x < minX) minX = x;
-    if (y < minY) minY = y;
-    if (x > maxX) maxX = x;
-    if (y > maxY) maxY = y;
-  }
-  return { minX, minY, maxX, maxY };
-}
-
-function sqDistanceToSegment(
-  px: number,
-  py: number,
-  x1: number,
-  y1: number,
-  x2: number,
-  y2: number
-): number {
-  const dx = x2 - x1;
-  const dy = y2 - y1;
-  if (Math.abs(dx) < 1e-6 && Math.abs(dy) < 1e-6) {
-    const ox = px - x1;
-    const oy = py - y1;
-    return ox * ox + oy * oy;
-  }
-  const t = clamp(((px - x1) * dx + (py - y1) * dy) / (dx * dx + dy * dy), 0, 1);
-  const cx = x1 + dx * t;
-  const cy = y1 + dy * t;
-  const ox = px - cx;
-  const oy = py - cy;
-  return ox * ox + oy * oy;
-}
-
 function traceAllLand(ctx: CanvasRenderingContext2D, project: Projection['project']) {
   const { countries } = getEuropeGeoData();
   for (const feature of countries.features) {
@@ -271,68 +222,63 @@ function traceAllLand(ctx: CanvasRenderingContext2D, project: Projection['projec
 }
 
 export function drawTerrainRelief(ctx: CanvasRenderingContext2D, project: Projection['project'], strokeScale = 1) {
-  const width = ctx.canvas.width;
-  const height = ctx.canvas.height;
-  const step = Math.max(2, Math.round(strokeScale * 0.8));
+  const reliefBandHeight = Math.max(2, Math.round(strokeScale * 1.2));
   const lonSpan = EUROPE_RELIEF_BOUNDS.maxLon - EUROPE_RELIEF_BOUNDS.minLon;
   const latSpan = EUROPE_RELIEF_BOUNDS.maxLat - EUROPE_RELIEF_BOUNDS.minLat;
-  const reliefLayer = document.createElement('canvas');
-  reliefLayer.width = width;
-  reliefLayer.height = height;
-  const reliefCtx = reliefLayer.getContext('2d');
-  if (!reliefCtx) return;
-
-  for (let sy = 0; sy < RELIEF_RASTER.height - step; sy += step) {
-    const latNorth = EUROPE_RELIEF_BOUNDS.maxLat - (sy / RELIEF_RASTER.height) * latSpan;
-    const latSouth = EUROPE_RELIEF_BOUNDS.maxLat - ((sy + step) / RELIEF_RASTER.height) * latSpan;
-
-    for (let sx = 0; sx < RELIEF_RASTER.width - step; sx += step) {
-      const sampleX = Math.min(RELIEF_RASTER.width - 1, sx + Math.floor(step / 2));
-      const sampleY = Math.min(RELIEF_RASTER.height - 1, sy + Math.floor(step / 2));
-      const idx = (sampleY * RELIEF_RASTER.width + sampleX) * 4;
-      const value = RELIEF_RASTER.data[idx] / 255;
-
-      const shadow = clamp((0.74 - value) / 0.34, 0, 1);
-      const highlight = clamp((value - 0.72) / 0.18, 0, 1);
-      if (shadow < 0.03 && highlight < 0.03) continue;
-
-      const lonWest = EUROPE_RELIEF_BOUNDS.minLon + (sx / RELIEF_RASTER.width) * lonSpan;
-      const lonEast = EUROPE_RELIEF_BOUNDS.minLon + ((sx + step) / RELIEF_RASTER.width) * lonSpan;
-      const [x1, y1] = project(lonWest, latNorth);
-      const [x2, y2] = project(lonEast, latNorth);
-      const [x3, y3] = project(lonEast, latSouth);
-      const [x4, y4] = project(lonWest, latSouth);
-
-      if (shadow >= 0.03) {
-        reliefCtx.fillStyle = `rgba(0,0,0,${0.28 * shadow})`;
-        reliefCtx.beginPath();
-        reliefCtx.moveTo(x1, y1);
-        reliefCtx.lineTo(x2, y2);
-        reliefCtx.lineTo(x3, y3);
-        reliefCtx.lineTo(x4, y4);
-        reliefCtx.closePath();
-        reliefCtx.fill();
-      }
-
-      if (highlight >= 0.03) {
-        reliefCtx.fillStyle = `rgba(255,255,255,${0.14 * highlight})`;
-        reliefCtx.beginPath();
-        reliefCtx.moveTo(x1, y1);
-        reliefCtx.lineTo(x2, y2);
-        reliefCtx.lineTo(x3, y3);
-        reliefCtx.lineTo(x4, y4);
-        reliefCtx.closePath();
-        reliefCtx.fill();
-      }
-    }
-  }
+  const [dstLeft] = project(EUROPE_RELIEF_BOUNDS.minLon, EUROPE_RELIEF_BOUNDS.maxLat);
+  const [dstRight] = project(EUROPE_RELIEF_BOUNDS.maxLon, EUROPE_RELIEF_BOUNDS.maxLat);
 
   ctx.save();
   ctx.beginPath();
   traceAllLand(ctx, project);
   ctx.clip('evenodd');
-  ctx.filter = `blur(${Math.max(2, strokeScale * 0.9)}px)`;
-  ctx.drawImage(reliefLayer, 0, 0);
+  ctx.globalCompositeOperation = 'multiply';
+  ctx.globalAlpha = 0.34;
+  ctx.imageSmoothingEnabled = true;
+
+  for (let sy = 0; sy < RELIEF_RASTER.height - reliefBandHeight; sy += reliefBandHeight) {
+    const latNorth = EUROPE_RELIEF_BOUNDS.maxLat - (sy / RELIEF_RASTER.height) * latSpan;
+    const latSouth = EUROPE_RELIEF_BOUNDS.maxLat - ((sy + reliefBandHeight) / RELIEF_RASTER.height) * latSpan;
+    const [, dstTop] = project(EUROPE_RELIEF_BOUNDS.minLon, latNorth);
+    const [, dstBottom] = project(EUROPE_RELIEF_BOUNDS.minLon, latSouth);
+    const destHeight = dstBottom - dstTop;
+    if (Math.abs(destHeight) < 0.5) continue;
+
+    ctx.drawImage(
+      RELIEF_RASTER.image,
+      0,
+      sy,
+      RELIEF_RASTER.width,
+      reliefBandHeight,
+      dstLeft,
+      dstTop,
+      dstRight - dstLeft,
+      destHeight
+    );
+  }
+
+  ctx.globalCompositeOperation = 'screen';
+  ctx.globalAlpha = 0.08;
+  ctx.filter = `blur(${Math.max(1.5, strokeScale * 0.6)}px)`;
+  for (let sy = 0; sy < RELIEF_RASTER.height - reliefBandHeight; sy += reliefBandHeight * 2) {
+    const latNorth = EUROPE_RELIEF_BOUNDS.maxLat - (sy / RELIEF_RASTER.height) * latSpan;
+    const latSouth = EUROPE_RELIEF_BOUNDS.maxLat - ((sy + reliefBandHeight * 2) / RELIEF_RASTER.height) * latSpan;
+    const [, dstTop] = project(EUROPE_RELIEF_BOUNDS.minLon, latNorth);
+    const [, dstBottom] = project(EUROPE_RELIEF_BOUNDS.minLon, latSouth);
+    const destHeight = dstBottom - dstTop;
+    if (Math.abs(destHeight) < 0.5) continue;
+    ctx.drawImage(
+      RELIEF_RASTER.image,
+      0,
+      sy,
+      RELIEF_RASTER.width,
+      reliefBandHeight * 2,
+      dstLeft,
+      dstTop,
+      dstRight - dstLeft,
+      destHeight
+    );
+  }
   ctx.filter = 'none';
   ctx.restore();
 }
